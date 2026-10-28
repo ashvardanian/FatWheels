@@ -1,6 +1,0 @@
-pybind11
-numpy
-numba
-pytest
-pytest-repeat
-pytest-benchmark

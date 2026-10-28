@@ -1,83 +1,54 @@
 {
-    "version": "2.0.0",
-    "tasks": [
-        {
-            "label": "Compile with NVCC",
-            "type": "shell",
-            "command": "/usr/local/cuda/bin/nvcc",
-            "args": [
-                "-gencode=arch=compute_70,code=compute_70",
-                "-o",
-                "${workspaceFolder}/build_debug/starter_kit",
-                "${workspaceFolder}/starter_kit.cu",
-                "-Xcompiler",
-                "-fopenmp",
-                "-g",
-                "-O0",
-                "--std=c++17",
-                "-DSTARTER_KIT_TEST"
-            ],
-            "group": {
-                "kind": "build",
-                "isDefault": true
-            },
-            "problemMatcher": [
-                "$gcc"
-            ],
-            "detail": "Compiles the code using NVCC"
-        },
-        {
-            "label": "Compile with GCC",
-            "type": "shell",
-            "command": "g++",
-            "args": [
-                "-o",
-                "${workspaceFolder}/build_debug/starter_kit",
-                "-x",
-                "c++",
-                "${workspaceFolder}/starter_kit.cu",
-                "-fopenmp",
-                "-fsanitize=address",
-                "-fsanitize=undefined",
-                "-g",
-                "-O0",
-                "--std=c++17",
-                "-DSTARTER_KIT_TEST"
-            ],
-            "group": {
-                "kind": "build",
-                "isDefault": true
-            },
-            "problemMatcher": [
-                "$gcc"
-            ],
-            "detail": "Compiles the code using GCC"
-        },
-        {
-            "label": "Compile with AppleClang",
-            "type": "shell",
-            "command": "clang++",
-            "args": [
-                "-o",
-                "${workspaceFolder}/build_debug/starter_kit",
-                "-x",
-                "c++",
-                "${workspaceFolder}/starter_kit.cu",
-                "-fsanitize=address",
-                "-fsanitize=undefined",
-                "-g",
-                "-O0",
-                "--std=c++17",
-                "-DSTARTER_KIT_TEST"
-            ],
-            "group": {
-                "kind": "build",
-                "isDefault": true
-            },
-            "problemMatcher": [
-                "$gcc"
-            ],
-            "detail": "Compiles the code using AppleClang"
-        }
-    ]
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Compile Tests with Clang",
+      "type": "shell",
+      "command": "clang++",
+      "args": [
+        "-o",
+        "${workspaceFolder}/build_debug/test",
+        "${workspaceFolder}/test.cpp",
+        "-I${workspaceFolder}",
+        "-fopenmp",
+        "-fsanitize=address",
+        "-fsanitize=undefined",
+        "-g",
+        "-O0",
+        "--std=c++20"
+      ],
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "problemMatcher": [
+        "$gcc"
+      ],
+      "detail": "Compiles the CPU kernel tests using Clang"
+    },
+    {
+      "label": "Compile Tests with AppleClang",
+      "type": "shell",
+      "command": "clang++",
+      "args": [
+        "-o",
+        "${workspaceFolder}/build_debug/test",
+        "${workspaceFolder}/test.cpp",
+        "-I${workspaceFolder}",
+        "-fsanitize=address",
+        "-fsanitize=undefined",
+        "-g",
+        "-O0",
+        "--std=c++20"
+      ],
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "problemMatcher": [
+        "$gcc"
+      ],
+      "detail": "Compiles the CPU kernel tests using AppleClang"
+    }
+  ]
 }

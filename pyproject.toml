@@ -1,20 +1,47 @@
 [build-system]
-requires = ["setuptools>=42", "wheel", "pybind11", "numpy"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "PyBindToGPUs"
-version = "0.2.0"
-description = "Starter Kit project for CUDA- and OpenMP-accelerated Python projects."
+name = "fatwheels"
+dynamic = ["version"]
+description = "Multi-versioned CPU kernels and NVIDIA and AMD GPU code, validated together in one Python package"
 readme = "README.md"
-requires-python = ">=3.7"
-license = { file = "LICENSE" }
-authors = [
-    { name = "Ash Vardanian", email = "1983160+ashvardanian@users.noreply.github.com" },
-]
-urls = { Homepage = "https://github.com/ashvardanian/PyBindToGPUs" }
-dependencies = ["pybind11", "numpy", "numba"]
+requires-python = ">=3.12"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+authors = [{ name = "Ash Vardanian", email = "1983160+ashvardanian@users.noreply.github.com" }]
+urls = { Homepage = "https://github.com/ashvardanian/FatWheels" }
+dependencies = ["numpy"]
 
 [project.optional-dependencies]
-cpu = ["pytest", "pytest-repeat", "pytest-benchmark"]
-gpu = ["cupy-cuda12x", "pycuda", "pytest", "pytest-repeat", "pytest-benchmark"]
+test = ["pytest", "pytest-benchmark", "numba"]
+
+[tool.setuptools]
+packages = ["fatwheels"]
+
+[tool.setuptools.dynamic]
+version = { file = "VERSION" }
+
+[tool.ruff]
+target-version = "py312"
+line-length = 120
+
+[tool.ruff.format]
+quote-style = "double"
+
+[tool.ruff.lint]
+extend-select = ["D", "I", "TID"]
+
+[tool.ruff.lint.flake8-tidy-imports]
+ban-relative-imports = "all"
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.per-file-ignores]
+"!fatwheels/**" = ["D"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["fatwheels"]
+combine-as-imports = true

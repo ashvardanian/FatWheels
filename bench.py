@@ -1,11 +1,15 @@
 #!/usr/bin/env python3
-"""
-Benchmark tests for the CUDA & OpenMP Starter Kit using "pytest-benchmark".
+"""FatWheels benchmarks: every kernel and the baseline, timed with pytest-benchmark.
+
+File: bench.py
+Author: Ash Vardanian
+Date: August 9, 2024
 
 This module defines benchmarks for reduction and matrix multiplication operations
-using parameterized kernels. The available kernels (baseline, OpenMP, and CUDA)
-are collected in lists and then each benchmark test is parameterized over the kernel,
-data type, and input size (and tile size for matrix multiplication).
+using parameterized kernels. The available kernels (baseline, every CPU capability
+this machine runs, and every GPU vendor whose module imported) are collected in lists,
+and each benchmark is parameterized over the kernel, data type, and input size
+(and tile size for matrix multiplication).
 
 Usage:
     uv run pytest --benchmark-enable bench.py
@@ -14,23 +18,20 @@ Usage:
 import numpy as np
 import pytest
 
-from starter_kit_baseline import reduce as reduce_baseline, matmul as matmul_baseline
-from starter_kit import reduce_openmp, reduce_cuda, matmul_openmp, matmul_cuda, supports_cuda
+import fatwheels
+from baseline import matmul as matmul_baseline, reduce as reduce_baseline
 
 # Build lists of (name, kernel_function) for reduction and matrix multiplication.
-REDUCTION_KERNELS = [
-    ("baseline", reduce_baseline),
-    ("openmp", reduce_openmp),
-]
-if supports_cuda():
-    REDUCTION_KERNELS.append(("cuda", reduce_cuda))
-
-MATMUL_KERNELS = [
-    ("baseline", matmul_baseline),
-    ("openmp", matmul_openmp),
-]
-if supports_cuda():
-    MATMUL_KERNELS.append(("cuda", matmul_cuda))
+REDUCTION_KERNELS = [("baseline", reduce_baseline)]
+MATMUL_KERNELS = [("baseline", matmul_baseline)]
+for name in fatwheels.capabilities():
+    REDUCTION_KERNELS.append((f"cpu-{name}", lambda a, name=name: fatwheels.reduce(a, capability=name)))
+    MATMUL_KERNELS.append((f"cpu-{name}", lambda a, b, name=name, **kw: fatwheels.matmul(a, b, capability=name, **kw)))
+for vendor in ("cuda", "hip"):
+    module = getattr(fatwheels, vendor)
+    if module is not None:
+        REDUCTION_KERNELS.append((vendor, module.reduce))
+        MATMUL_KERNELS.append((vendor, module.matmul))
 
 
 @pytest.mark.parametrize("dtype", [np.float32, np.int32])
@@ -43,7 +44,7 @@ def test_reduce(benchmark, dtype, n, kernel_name, kernel_func):
     Parameters:
         dtype (np.dtype): Data type for the input array.
         n (int): Size of the input array.
-        kernel_name (str): Name of the kernel (baseline, openmp, cuda).
+        kernel_name (str): Name of the kernel, like baseline, cpu-haswell, cuda or hip.
         kernel_func (function): The reduction function to benchmark.
 
     The test generates a random 1D array of size n, converts it to the given dtype,
@@ -67,7 +68,7 @@ def test_matmul(benchmark, dtype, n, tile_size, kernel_name, kernel_func):
         dtype (np.dtype): Data type for the input matrices.
         n (int): Dimension of the square matrices.
         tile_size (int): Tile size to use for the multiplication kernel.
-        kernel_name (str): Name of the kernel (baseline, openmp, cuda).
+        kernel_name (str): Name of the kernel, like baseline, cpu-haswell, cuda or hip.
         kernel_func (function): The matrix multiplication function to benchmark.
 
     The test generates a random n x n matrix (used as both input matrices) and benchmarks

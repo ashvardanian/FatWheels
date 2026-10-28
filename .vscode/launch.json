@@ -1,122 +1,84 @@
 {
-    // Use IntelliSense to learn about possible attributes.
-    // Hover to view descriptions of existing attributes.
-    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
-    "version": "0.2.0",
-    "configurations": [
+  // Use IntelliSense to learn about possible attributes.
+  // Hover to view descriptions of existing attributes.
+  // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Python Debugger: Current File",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${file}",
+      "console": "integratedTerminal"
+    },
+    {
+      "name": "Debug Clang Build",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/build_debug/test",
+      "args": [],
+      "stopAtEntry": false,
+      "cwd": "${workspaceFolder}",
+      "environment": [
         {
-            "name": "Python Debugger: Current File",
-            "type": "debugpy",
-            "request": "launch",
-            "program": "${file}",
-            "console": "integratedTerminal"
+          "name": "ASAN_OPTIONS",
+          "value": "detect_leaks=0"
         },
         {
-            "name": "Debug GCC Build",
-            "type": "cppdbg",
-            "request": "launch",
-            "program": "${workspaceFolder}/build_debug/starter_kit",
-            "args": [],
-            "stopAtEntry": false,
-            "cwd": "${workspaceFolder}",
-            "environment": [
-                {
-                    "name": "ASAN_OPTIONS",
-                    "value": "detect_leaks=0"
-                },
-                {
-                    "name": "LSAN_OPTIONS",
-                    "value": "verbosity=1:log_threads=1"
-                }
-            ],
-            "externalConsole": false,
-            "MIMode": "gdb",
-            "setupCommands": [
-                {
-                    "description": "Enable pretty-printing for gdb",
-                    "text": "-enable-pretty-printing",
-                    "ignoreFailures": true
-                }
-            ],
-            "preLaunchTask": "Compile with GCC",
-            "miDebuggerPath": "/usr/bin/gdb",
-            "logging": {
-                "moduleLoad": false,
-                "programOutput": true,
-                "trace": false,
-                "traceResponse": false
-            },
-            "visualizerFile": "${workspaceFolder}/.vscode/gdb/visualizers/custom.visualizer",
-            "showDisplayString": true
-        },
-        {
-            "name": "Debug NVCC Build",
-            "type": "cppdbg",
-            "request": "launch",
-            "program": "${workspaceFolder}/build_debug/starter_kit",
-            "args": [],
-            "stopAtEntry": false,
-            "cwd": "${workspaceFolder}",
-            "environment": [
-                {
-                    "name": "ASAN_OPTIONS",
-                    "value": "detect_leaks=0"
-                },
-                {
-                    "name": "LSAN_OPTIONS",
-                    "value": "verbosity=1:log_threads=1"
-                }
-            ],
-            "externalConsole": false,
-            "MIMode": "gdb",
-            "setupCommands": [
-                {
-                    "description": "Enable pretty-printing for gdb",
-                    "text": "-enable-pretty-printing",
-                    "ignoreFailures": true
-                }
-            ],
-            "preLaunchTask": "Compile with NVCC",
-            "miDebuggerPath": "/usr/bin/gdb",
-            "logging": {
-                "moduleLoad": false,
-                "programOutput": true,
-                "trace": false,
-                "traceResponse": false
-            },
-            "visualizerFile": "${workspaceFolder}/.vscode/gdb/visualizers/custom.visualizer",
-            "showDisplayString": true
-        },
-        {
-            "name": "Debug AppleClang Build",
-            "type": "cppdbg",
-            "request": "launch",
-            "program": "${workspaceFolder}/build_debug/starter_kit",
-            "args": [],
-            "stopAtEntry": false,
-            "cwd": "${workspaceFolder}",
-            "environment": [
-                {
-                    "name": "ASAN_OPTIONS",
-                    "value": "detect_leaks=0"
-                },
-                {
-                    "name": "LSAN_OPTIONS",
-                    "value": "verbosity=1:log_threads=1"
-                }
-            ],
-            "externalConsole": false,
-            "MIMode": "lldb",
-            "setupCommands": [],
-            "preLaunchTask": "Compile with AppleClang",
-            "logging": {
-                "moduleLoad": false,
-                "programOutput": true,
-                "trace": false,
-                "traceResponse": false
-            },
-            "visualizerFile": "${workspaceFolder}/.vscode/gdb/visualizers/custom.visualizer",
-            "showDisplayString": true
+          "name": "LSAN_OPTIONS",
+          "value": "verbosity=1:log_threads=1"
         }
-    ]
+      ],
+      "externalConsole": false,
+      "MIMode": "gdb",
+      "setupCommands": [
+        {
+          "description": "Enable pretty-printing for gdb",
+          "text": "-enable-pretty-printing",
+          "ignoreFailures": true
+        }
+      ],
+      "preLaunchTask": "Compile Tests with Clang",
+      "miDebuggerPath": "/usr/bin/gdb",
+      "logging": {
+        "moduleLoad": false,
+        "programOutput": true,
+        "trace": false,
+        "traceResponse": false
+      },
+      "visualizerFile": "${workspaceFolder}/.vscode/gdb/visualizers/custom.visualizer",
+      "showDisplayString": true
+    },
+    {
+      "name": "Debug AppleClang Build",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/build_debug/test",
+      "args": [],
+      "stopAtEntry": false,
+      "cwd": "${workspaceFolder}",
+      "environment": [
+        {
+          "name": "ASAN_OPTIONS",
+          "value": "detect_leaks=0"
+        },
+        {
+          "name": "LSAN_OPTIONS",
+          "value": "verbosity=1:log_threads=1"
+        }
+      ],
+      "externalConsole": false,
+      "MIMode": "lldb",
+      "setupCommands": [],
+      "preLaunchTask": "Compile Tests with AppleClang",
+      "logging": {
+        "moduleLoad": false,
+        "programOutput": true,
+        "trace": false,
+        "traceResponse": false
+      },
+      "visualizerFile": "${workspaceFolder}/.vscode/gdb/visualizers/custom.visualizer",
+      "showDisplayString": true
+    }
+  ]
 }

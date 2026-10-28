@@ -1,190 +1,64 @@
+"""FatWheels build: `fatwheels._cpu` always, and `_cuda` and `_hip` from one `gpu.cu` where NVCC or ROCm is.
+
+File: setup.py
+Author: Ash Vardanian
+Date: August 9, 2024
+"""
+
 import os
-import platform
-from setuptools import setup
-from setuptools.extension import Extension
+import shutil
+import subprocess
+import sysconfig
+
+from setuptools import Extension, setup
 from setuptools.command.build_ext import build_ext
-from distutils.sysconfig import get_python_inc, get_python_lib
 
-import pybind11
-import numpy as np
+# Every listed architecture gets machine code; the newest NVIDIA one also gets PTX for future GPUs.
+nvidia_architectures = ["75", "80", "89", "90", "100", "120"]
+amd_architectures = ["gfx90a", "gfx942", "gfx950", "gfx1100", "gfx1201"]
 
-is_macos = platform.system() == "Darwin"
-is_linux = platform.system() == "Linux"
-is_nvcc_available = os.system("which nvcc > /dev/null 2>&1") == 0
-enable_openmp = not is_macos
-enable_cuda = is_linux and is_nvcc_available
-
-
-class BuildExt(build_ext):
-    def build_extensions(self):
-        self.compiler.src_extensions.append(".cu")
-
-        for ext in self.extensions:
-            if any(source.endswith(".cu") for source in ext.sources):
-                if is_nvcc_available:
-                    self.build_cuda_extension(ext)
-                else:
-                    self.build_gcc_extension(ext)
-            else:
-                super().build_extension(ext)
-
-    def build_cuda_extension(self, ext):
-        # Compile CUDA source files
-        for source in ext.sources:
-            if source.endswith(".cu"):
-                self.compile_cuda(source)
-
-        # Compile non-CUDA source files
-        objects = []
-        for source in ext.sources:
-            if not source.endswith(".cu"):
-                obj = self.compiler.compile(
-                    [source],
-                    output_dir=self.build_temp,
-                    extra_postargs=[
-                        "-fPIC",
-                        "-std=c++17",
-                        "-fdiagnostics-color=always",
-                    ],
-                )
-                objects.extend(obj)
-
-        # Link all object files
-        self.compiler.link_shared_object(
-            objects + [os.path.join(self.build_temp, "starter_kit.o")],
-            self.get_ext_fullpath(ext.name),
-            libraries=ext.libraries,
-            library_dirs=ext.library_dirs,
-            runtime_library_dirs=ext.runtime_library_dirs,
-            extra_postargs=ext.extra_link_args,
-            target_lang=ext.language,
-        )
-
-    def build_gcc_extension(self, ext):
-        # Check if compiling on macOS
-        objects = []
-        for source in ext.sources:
-            if source.endswith(".cu"):
-                obj = self.compiler.compile(
-                    [source],
-                    output_dir=self.build_temp,
-                    extra_preargs=["-x", "c++"],
-                    extra_postargs=[
-                        "-fPIC",
-                        "-std=c++17",
-                        "-fdiagnostics-color=always",
-                    ]
-                    + (["-fopenmp"] if enable_openmp else []),
-                    include_dirs=ext.include_dirs,
-                )
-            else:
-                obj = self.compiler.compile(
-                    [source],
-                    output_dir=self.build_temp,
-                    extra_postargs=[
-                        "-fPIC",
-                        "-std=c++17",
-                        "-fdiagnostics-color=always",
-                    ]
-                    + (["-fopenmp"] if enable_openmp else []),
-                    include_dirs=ext.include_dirs,
-                )
-            objects.extend(obj)
-
-        # Link all object files
-        self.compiler.link_shared_object(
-            objects,
-            self.get_ext_fullpath(ext.name),
-            libraries=[lib for lib in ext.libraries if not lib.startswith("cu")],
-            library_dirs=ext.library_dirs,
-            runtime_library_dirs=ext.runtime_library_dirs,
-            extra_postargs=ext.extra_link_args,
-            target_lang=ext.language,
-        )
-
-    def compile_cuda(self, source):
-        # Compile CUDA source file using NVCC
-        ext = self.extensions[0]
-        output_dir = self.build_temp
-        os.makedirs(output_dir, exist_ok=True)
-        include_dirs = self.compiler.include_dirs + ext.include_dirs
-        include_dirs = " ".join(f"-I{dir}" for dir in include_dirs)
-        output_file = os.path.join(output_dir, "starter_kit.o")
-
-        # Let's try inferring the compute capability from the GPU
-        arch_code = "90"
-        try:
-            import pycuda.driver as cuda
-            import pycuda.autoinit
-
-            device = cuda.Device(0)  # Get the default device
-            major, minor = device.compute_capability()
-            arch_code = f"{major}{minor}"
-        except ImportError:
-            pass
-
-        cmd = (
-            f"nvcc -c {source} -o {output_file} -std=c++17 "
-            f"-gencode=arch=compute_{arch_code},code=sm_{arch_code} "
-            f"-Xcompiler -fPIC {include_dirs} -O3 -g"
-        )
-        if os.system(cmd) != 0:
-            raise RuntimeError(f"nvcc compilation of {source} failed")
+nvcc = shutil.which("nvcc")
+rocm_clang = "/opt/rocm/llvm/bin/clang++" if os.path.exists("/opt/rocm/llvm/bin/clang++") else None
+openmp = [] if sysconfig.get_platform().startswith("macosx") else ["-fopenmp"]
+includes = [sysconfig.get_paths()["include"], os.path.dirname(os.path.abspath(__file__))]
 
 
-__version__ = open("VERSION", "r").read().strip()
+class BuildGPU(build_ext):
+    """Compiles `fatwheels/gpu.cu` with NVCC or ROCm's Clang straight into an extension module."""
 
-long_description = ""
-this_directory = os.path.abspath(os.path.dirname(__file__))
-with open(os.path.join(this_directory, "README.md"), "r", encoding="utf-8") as f:
-    long_description = f.read()
+    def build_extension(self, extension):
+        if not extension.sources[0].endswith(".cu"):
+            return super().build_extension(extension)
+        output = self.get_ext_fullpath(extension.name)
+        os.makedirs(os.path.dirname(output), exist_ok=True)
+        flags = ["-std=c++20", "-O3", *[f"-I{include}" for include in includes]]
+        if extension.name.endswith("_cuda"):
+            newest = nvidia_architectures[-1]
+            codes = [f"-gencode=arch=compute_{code},code=sm_{code}" for code in nvidia_architectures]
+            host = os.environ.get("CUDAHOSTCXX", "clang++")
+            command = [nvcc, "-ccbin", host, "-x", "cu", "-shared", "-Xcompiler", "-fPIC", *codes]
+            command += [f"-gencode=arch=compute_{newest},code=compute_{newest}", *flags]
+            command += [extension.sources[0], "-o", output]
+        else:
+            offload = [f"--offload-arch={code}" for code in amd_architectures]
+            command = [rocm_clang, "-x", "hip", "-shared", "-fPIC", *offload, *flags, "-I/opt/rocm/include"]
+            command += [extension.sources[0], "-o", output, "-L/opt/rocm/lib", "-lamdhip64"]
+        subprocess.run(command, check=True)
 
-# Get Python library path dynamically
-python_lib_dir = get_python_lib(standard_lib=True)
-python_lib_name = os.path.basename(python_lib_dir).replace(".so", "")
 
-ext_modules = [
+extensions = [
     Extension(
-        "starter_kit",
-        ["starter_kit.cu"],
-        include_dirs=[
-            pybind11.get_include(),
-            np.get_include(),
-            get_python_inc(),
-            "cccl/cub/",
-            "cccl/libcudacxx/include",
-            "cccl/thrust/",
-            "/usr/local/cuda/include/",
-            "/usr/include/cuda/",
-        ],
-        library_dirs=[
-            "/usr/local/cuda/lib64",
-            "/usr/lib/x86_64-linux-gnu",
-            "/usr/lib/wsl/lib",
-            python_lib_dir,
-        ],
-        #
-        libraries=[python_lib_name.replace(".a", "")]
-        + (["cudart", "cuda", "cublas"] if enable_cuda else [])
-        + (["gomp"] if enable_openmp else []),
-        #
-        extra_link_args=[f"-Wl,-rpath,{python_lib_dir}"]
-        + (["-fopenmp"] if enable_openmp else []),
+        "fatwheels._cpu",
+        ["fatwheels/cpu.cpp"],
+        include_dirs=includes,
         language="c++",
-    ),
+        extra_compile_args=["-std=c++20", "-O3", *openmp],
+        extra_link_args=openmp,
+    )
 ]
+if nvcc:
+    extensions.append(Extension("fatwheels._cuda", ["fatwheels/gpu.cu"]))
+if rocm_clang:
+    extensions.append(Extension("fatwheels._hip", ["fatwheels/gpu.cu"]))
 
-setup(
-    name="PyBindToGPUs",
-    version=__version__,
-    author="Ash Vardanian",
-    author_email="1983160+ashvardanian@users.noreply.github.com",
-    url="https://github.com/ashvardanian/PyBindToGPUs",
-    description="Starter Kit project for CUDA- and OpenMP-accelerated Python projects.",
-    long_description=long_description,
-    ext_modules=ext_modules,
-    extras_require={"test": "pytest"},
-    cmdclass={"build_ext": BuildExt},
-    zip_safe=False,
-    python_requires=">=3.7",
-)
+setup(ext_modules=extensions, cmdclass={"build_ext": BuildGPU})

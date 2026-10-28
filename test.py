@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
-"""
-test.py - Unit tests for the CUDA & OpenMP Starter Kit for Python Developers.
+"""FatWheels tests: every kernel against the baseline Python and Numba code.
 
-This module verifies the correctness of reduction and matrix multiplication 
-operations implemented in both the baseline Python/Numba code and the optimized 
-C++/CUDA (and OpenMP) implementations.
+File: test.py
+Author: Ash Vardanian
+Date: August 9, 2024
 
-Tests are executed using pytest. The module dynamically selects which backends 
-to test based on whether CUDA is supported.
+This module verifies the reduction and matrix multiplication kernels against the
+baseline Python/Numba code: on the CPU at every capability this machine runs,
+and on every GPU vendor whose module imported.
 
 Usage:
     uv run pytest test.py -s -x
@@ -15,13 +15,24 @@ Usage:
     python -m pytest test.py -s -x
 """
 
-import pytest
 import numpy as np
+import pytest
 
-from starter_kit_baseline import matmul as matmul_baseline, reduce as reduce_baseline
-from starter_kit import supports_cuda, reduce_openmp, reduce_cuda, matmul_openmp, matmul_cuda
+import fatwheels
+from baseline import matmul as matmul_baseline, reduce as reduce_baseline
 
-backends = ["openmp", "cuda"] if supports_cuda() else ["openmp"]
+# Every CPU capability this machine runs, and every GPU vendor whose module imported.
+backends = [f"cpu-{name}" for name in fatwheels.capabilities()]
+backends += [vendor for vendor in ("cuda", "hip") if getattr(fatwheels, vendor) is not None]
+
+
+def call(backend, function, *args, **kwargs):
+    """Calls `function` on the CPU at the capability `backend` names, or on the GPU vendor it names."""
+    device, _, capability = backend.partition("-")
+    if device == "cpu":
+        return getattr(fatwheels, function)(*args, capability=capability, **kwargs)
+    return getattr(getattr(fatwheels, device), function)(*args, **kwargs)
+
 
 @pytest.mark.parametrize("dtype", [np.float32, np.float64, np.int64, np.uint64])
 @pytest.mark.parametrize("backend", backends)
@@ -30,12 +41,12 @@ def test_reduce(dtype, backend):
     Test the reduction operation for different data types and backends.
 
     This test generates a 1D array of random values, computes the expected sum
-    using the baseline Python/Numba implementation, and compares it against 
+    using the baseline Python/Numba implementation, and compares it against
     the result from the optimized C++/CUDA (or OpenMP) implementation.
 
     Parameters:
         dtype (np.dtype): The data type for the array elements (e.g., np.float32).
-        backend (str): The backend to test ('openmp' or 'cuda').
+        backend (str): The backend to test, like 'cpu-haswell', 'cpu-serial', 'cuda' or 'hip'.
 
     Raises:
         AssertionError: If the results differ by more than the acceptable tolerance.
@@ -46,11 +57,8 @@ def test_reduce(dtype, backend):
     # Get the expected result from the baseline implementation
     expected_result = reduce_baseline(data)
 
-    # Get the result from the C++/CUDA implementation
-    if backend == "openmp":
-        result = reduce_openmp(data)
-    elif backend == "cuda":
-        result = reduce_cuda(data)
+    # Get the result from the optimized implementation
+    result = call(backend, "reduce", data)
 
     # Compare the results
     np.testing.assert_allclose(result, expected_result, rtol=1e-2)
@@ -61,17 +69,17 @@ def test_reduce(dtype, backend):
 @pytest.mark.parametrize("backend", backends)
 def test_matmul(dtype, tile_size, backend):
     """
-    Test the matrix multiplication operation for different tile sizes, data types, 
+    Test the matrix multiplication operation for different tile sizes, data types,
     and backends.
 
-    This test generates two random 2D matrices, computes the product using the 
-    baseline implementation, and compares it to the product computed by the 
+    This test generates two random 2D matrices, computes the product using the
+    baseline implementation, and compares it to the product computed by the
     optimized C++/CUDA (or OpenMP) implementation.
 
     Parameters:
         dtype (np.dtype): The data type for the matrix elements (e.g., np.float32).
         tile_size (int): The tile size to be used for the multiplication kernel.
-        backend (str): The backend to test ('openmp' or 'cuda').
+        backend (str): The backend to test, like 'cpu-haswell', 'cpu-serial', 'cuda' or 'hip'.
 
     Raises:
         AssertionError: If the output matrices differ by more than the acceptable tolerance.
@@ -83,14 +91,20 @@ def test_matmul(dtype, tile_size, backend):
     # Get the expected result from the baseline implementation
     expected_result = matmul_baseline(a, b)
 
-    # Get the result from the C++/CUDA implementation
-    if backend == "openmp":
-        result = matmul_openmp(a, b, tile_size=tile_size)
-    elif backend == "cuda":
-        result = matmul_cuda(a, b, tile_size=tile_size)
+    # Get the result from the optimized implementation
+    result = call(backend, "matmul", a, b, tile_size=tile_size)
 
     # Compare the results
     np.testing.assert_allclose(result, expected_result, rtol=1e-2)
+
+
+@pytest.mark.parametrize("capability", fatwheels.capabilities())
+def test_matmul_strided_rows(capability):
+    """Row-sliced inputs are read in place, through their row strides, rather than copied or rejected."""
+    a = (np.random.rand(64, 48) * 100).astype(np.float32)[::2]
+    b = (np.random.rand(96, 48) * 100).astype(np.float32)[::2]
+    result = fatwheels.matmul(a, b, capability=capability)
+    np.testing.assert_allclose(result, matmul_baseline(np.ascontiguousarray(a), np.ascontiguousarray(b)), rtol=1e-2)
 
 
 if __name__ == "__main__":

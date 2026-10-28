@@ -14,3 +14,6 @@ __pycache__
 build_debug
 build_release
 .DS_Store
+/build
+/dist
+/test
