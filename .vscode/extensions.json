@@ -1,0 +1,10 @@
+{
+  "recommendations": [
+    "charliermarsh.ruff",
+    "dprint.dprint",
+    "llvm-vs-code-extensions.vscode-clangd",
+    "ms-python.python",
+    "tamasfe.even-better-toml",
+    "yzhang.markdown-all-in-one"
+  ]
+}

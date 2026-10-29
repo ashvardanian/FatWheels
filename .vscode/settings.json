@@ -1,5 +1,87 @@
 {
+  "[cpp]": {
+    "editor.defaultFormatter": "llvm-vs-code-extensions.vscode-clangd",
+    "editor.formatOnSave": true,
+    "editor.rulers": [
+      120
+    ]
+  },
+  "[cuda-cpp]": {
+    "editor.defaultFormatter": "llvm-vs-code-extensions.vscode-clangd",
+    "editor.formatOnSave": true,
+    "editor.rulers": [
+      120
+    ]
+  },
+  "[json]": {
+    "editor.defaultFormatter": "dprint.dprint",
+    "editor.formatOnSave": true,
+    "editor.rulers": [
+      120
+    ]
+  },
+  "[jsonc]": {
+    "editor.defaultFormatter": "dprint.dprint",
+    "editor.formatOnSave": true,
+    "editor.rulers": [
+      120
+    ]
+  },
+  "[markdown]": {
+    "editor.defaultFormatter": "yzhang.markdown-all-in-one",
+    "editor.formatOnSave": false,
+    "editor.rulers": [
+      120
+    ]
+  },
+  "[python]": {
+    "editor.defaultFormatter": "charliermarsh.ruff",
+    "editor.formatOnSave": true,
+    "editor.rulers": [
+      120
+    ]
+  },
+  "[yaml]": {
+    "editor.defaultFormatter": "dprint.dprint",
+    "editor.formatOnSave": true,
+    "editor.rulers": [
+      120
+    ]
+  },
+  "clangd.arguments": [
+    "--background-index",
+    "--header-insertion=never"
+  ],
+  "cSpell.words": [
+    "allclose",
+    "ashvardanian",
+    "astype",
+    "CCCL",
+    "CUDA",
+    "CuPy",
+    "dtype",
+    "fatbin",
+    "fatwheels",
+    "GHCR",
+    "GPGPU",
+    "HIP",
+    "MatMul",
+    "multiversioned",
+    "ndarray",
+    "njit",
+    "Numba",
+    "OpenMP",
+    "QEMU",
+    "ROCm",
+    "rocThrust",
+    "RVV",
+    "subinterpreters",
+    "SVE",
+    "sysroots",
+    "Vardanian"
+  ],
   "files.associations": {
+    "*.cu": "cuda-cpp",
     "algorithm": "cpp",
     "cstdlib": "cpp",
     "__bit_reference": "cpp",
@@ -88,20 +170,5 @@
     "stop_token": "cpp",
     "streambuf": "cpp",
     "expected": "cpp"
-  },
-  "cSpell.words": [
-    "allclose",
-    "astype",
-    "CCCL",
-    "CUDA",
-    "CuPy",
-    "dtype",
-    "GPGPU",
-    "MatMul",
-    "ndarray",
-    "njit",
-    "Numba",
-    "OpenMP",
-    "Vardanian"
-  ]
+  }
 }

@@ -107,5 +107,12 @@ def test_matmul_strided_rows(capability):
     np.testing.assert_allclose(result, matmul_baseline(np.ascontiguousarray(a), np.ascontiguousarray(b)), rtol=1e-2)
 
 
+def test_matmul_rejects_overflowing_indices():
+    """Matrices spanning 2^32 elements or more raise instead of wrapping their 32-bit indices."""
+    huge = np.lib.stride_tricks.as_strided(np.zeros(1, dtype=np.float32), shape=(70_000, 70_000), strides=(280_000, 4))
+    with pytest.raises(ValueError, match="2\\^32"):
+        fatwheels.matmul(huge, huge)
+
+
 if __name__ == "__main__":
     pytest.main()

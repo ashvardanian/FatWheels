@@ -7,17 +7,17 @@
  *  Multi-phase initialization declares the module free of the GIL and safe for subinterpreters: the
  *  kernels keep no state, and each call releases the GIL while it computes.
  */
-#include "fatwheels/python.hpp"
-
 #include <cstddef> // `std::size_t`
 #include <cstring> // `std::strcmp`
-#include <span>    // `std::span`
 
-#include "fatwheels/cpu.hpp"
+#include <span> // `std::span`
+
+#include "cpu.hpp"
+#include "python.hpp"
 
 namespace fw = ashvardanian::fatwheels;
 
-namespace ashvardanian::fatwheels::python {
+namespace ashvardanian::fatwheels {
 
 #pragma region Arguments
 
@@ -47,6 +47,10 @@ static bool rows_from_python(Py_buffer const &view, char const *label, cell_idx_
     }
     if (view.strides[1] != view.itemsize || view.strides[0] <= 0 || view.strides[0] % view.itemsize != 0) {
         PyErr_Format(PyExc_ValueError, "%s must have contiguous rows", label);
+        return false;
+    }
+    if (view.shape[0] * (view.strides[0] / view.itemsize) >= Py_ssize_t {1} << 32) {
+        PyErr_Format(PyExc_ValueError, "%s spans 2^32 elements or more, past what 32-bit indices reach", label);
         return false;
     }
     rows = static_cast<cell_idx_t>(view.shape[0]);
@@ -239,6 +243,6 @@ static struct PyModuleDef cpu_module = {
 
 #pragma endregion Initialization
 
-} // namespace ashvardanian::fatwheels::python
+} // namespace ashvardanian::fatwheels
 
-extern "C" PyMODINIT_FUNC PyInit__cpu(void) { return PyModuleDef_Init(&fw::python::cpu_module); }
+extern "C" PyMODINIT_FUNC PyInit__cpu(void) { return PyModuleDef_Init(&fw::cpu_module); }

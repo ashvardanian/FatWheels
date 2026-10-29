@@ -1,15 +1,14 @@
 # syntax=docker/dockerfile:1
 
-# Toolchain images for building and validating multi-versioned CPU kernels and multi-vendor GPU code
-# in one package, for FatWheels' own CI and for any project that ships such code. Each publishes as
-# `ghcr.io/ashvardanian/fatwheels:<target>-<commit>`:
+# Toolchain images for building and validating code that ships multi-versioned CPU kernels and
+# NVIDIA and AMD GPU code in one package. FatWheels' CI runs in them, and so can any other project's.
 #
 # - `cpu`: Clang 23, static QEMU user-mode and GCC 15 sysroots, to cross-compile every CPU
 #   capability and run it under emulation.
 # - `verify`: `cpu` plus GenMC and Spin, to model-check concurrent code.
-# - `gpu`: CUDA 13.4, and on x86-64 ROCm 10.0, to compile NVIDIA and AMD device code side by side.
+# - `gpu`: CUDA 13.4, plus ROCm 10.0 on x86-64, to compile NVIDIA and AMD device code side by side.
 #
-# Every pin is an `ARG` at the top of the file or of its stage, so a bump is a one-line change.
+# Each publishes as `ghcr.io/ashvardanian/fatwheels:<target>-<commit>`, and every pin is an `ARG`.
 
 ARG UBUNTU=ubuntu:26.04
 # ROCm 10.0's Clang is LLVM 23 too, matching `LLVM`; 10.1 moved to 24.
@@ -53,7 +52,11 @@ RUN curl -fsSLo /tmp/qemu.tar.xz "https://download.qemu.org/qemu-${QEMU_VERSION}
 
 FROM ${UBUNTU} AS cpu
 ARG LLVM
-LABEL org.opencontainers.image.source=https://github.com/ashvardanian/FatWheels
+# Every stage inherits Ubuntu's own title, description and version labels unless it sets its own.
+LABEL org.opencontainers.image.source=https://github.com/ashvardanian/FatWheels \
+      org.opencontainers.image.title="FatWheels CPU" \
+      org.opencontainers.image.description="Clang 23, QEMU and cross sysroots to build and emulate CPU capabilities" \
+      org.opencontainers.image.version=""
 ENV DEBIAN_FRONTEND=noninteractive
 COPY --from=scripts /install-llvm /usr/local/bin/install-llvm
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -72,6 +75,8 @@ COPY --from=qemu /opt/qemu/bin/ /usr/local/bin/
 RUN for emulator in /usr/local/bin/qemu-*; do ln -s "${emulator##*/}" "${emulator}-static"; done
 
 FROM cpu AS verify
+LABEL org.opencontainers.image.title="FatWheels Verify" \
+      org.opencontainers.image.description="The CPU image plus GenMC and Spin, to model-check concurrent code"
 ARG GENMC_COMMIT=9f6c4c0772d0c42b325681581acc6a0f3eb9b5f7
 ARG JOBS=
 # GenMC v0.19 supports LLVM 19 to 22, and its passes lack the `printPipeline` LLVM 23's pass manager requires, so the
@@ -109,13 +114,17 @@ FROM rocm-${TARGETARCH} AS rocm
 FROM ${UBUNTU} AS gpu
 ARG CUDA=13.4
 ARG LLVM
-LABEL org.opencontainers.image.source=https://github.com/ashvardanian/FatWheels
+LABEL org.opencontainers.image.source=https://github.com/ashvardanian/FatWheels \
+      org.opencontainers.image.title="FatWheels GPU" \
+      org.opencontainers.image.description="CUDA 13.4, plus ROCm 10.0 on x86-64, for NVIDIA and AMD device code" \
+      org.opencontainers.image.version=""
 ENV DEBIAN_FRONTEND=noninteractive
 COPY --from=scripts /install-llvm /usr/local/bin/install-llvm
 RUN apt-get update && apt-get install -y --no-install-recommends \
         ca-certificates curl gnupg git cmake ninja-build make python3 python3-dev python3-venv xz-utils binutils && \
     repository=https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2604 && \
-    curl -fsSLo /tmp/cuda-keyring.deb "${repository}/$(uname -m | sed 's/aarch64/sbsa/')/cuda-keyring_1.1-1_all.deb" && \
+    platform=$(uname -m | sed 's/aarch64/sbsa/') && \
+    curl -fsSLo /tmp/cuda-keyring.deb "${repository}/${platform}/cuda-keyring_1.1-1_all.deb" && \
     dpkg -i /tmp/cuda-keyring.deb && rm /tmp/cuda-keyring.deb && \
     install-llvm 22 "${LLVM}" && \
     suffix=$(echo "${CUDA}" | tr . -) && \

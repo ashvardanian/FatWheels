@@ -12,11 +12,12 @@
 #define PY_SSIZE_T_CLEAN
 #include <Python.h>
 
-#include <cstdint>          // `std::int8_t`, `std::uint64_t`
+#include <cstdint> // `std::int8_t`, `std::uint64_t`
+
 #include <initializer_list> // `std::initializer_list`
 #include <type_traits>      // `std::is_same_v`
 
-namespace ashvardanian::fatwheels::python {
+namespace ashvardanian::fatwheels {
 
 template <typename function_type_>
 PyCFunction as_pycfunction(function_type_ function) noexcept {
@@ -138,4 +139,4 @@ PyObject *new_matrix(Py_ssize_t rows, Py_ssize_t columns) noexcept {
     return matrix;
 }
 
-} // namespace ashvardanian::fatwheels::python
+} // namespace ashvardanian::fatwheels

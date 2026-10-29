@@ -6,8 +6,9 @@
  */
 #include <cstdint> // `std::int32_t`, `std::int64_t`
 #include <cstdio>  // `std::printf`
-#include <span>    // `std::span`
-#include <vector>  // `std::vector`
+
+#include <span>   // `std::span`
+#include <vector> // `std::vector`
 
 #include "fatwheels/cpu.hpp"
 

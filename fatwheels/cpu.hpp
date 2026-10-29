@@ -10,10 +10,11 @@
  *  than run inside them, as Clang outlines an OpenMP region without its parent's target features.
  */
 #pragma once
+#include <cstddef> // `std::size_t`
+#include <cstring> // `std::memset`
+
 #include <algorithm> // `std::min`
-#include <cstddef>   // `std::size_t`
 #include <span>      // `std::span`
-#include <cstring>   // `std::memset`
 
 #if defined(__x86_64__)
 #include <cpuid.h>     // `__get_cpuid`, `__get_cpuid_count`
@@ -22,7 +23,7 @@
 #include <sys/auxv.h> // `getauxval`
 #endif
 
-#include "fatwheels/types.hpp"
+#include "types.hpp"
 
 namespace ashvardanian::fatwheels {
 

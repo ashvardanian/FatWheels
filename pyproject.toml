@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "fatwheels"
 dynamic = ["version"]
-description = "Multi-versioned CPU kernels and NVIDIA and AMD GPU code, validated together in one Python package"
+description = "Starter kit for one Python wheel carrying multi-versioned CPU kernels and both NVIDIA and AMD GPU modules"
 readme = "README.md"
 requires-python = ">=3.12"
 license = "Apache-2.0"
@@ -19,6 +19,9 @@ test = ["pytest", "pytest-benchmark", "numba"]
 
 [tool.setuptools]
 packages = ["fatwheels"]
+
+[tool.setuptools.package-data]
+fatwheels = ["__init__.pyi", "py.typed"]
 
 [tool.setuptools.dynamic]
 version = { file = "VERSION" }

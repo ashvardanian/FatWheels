@@ -20,7 +20,7 @@ amd_architectures = ["gfx90a", "gfx942", "gfx950", "gfx1100", "gfx1201"]
 nvcc = shutil.which("nvcc")
 rocm_clang = "/opt/rocm/llvm/bin/clang++" if os.path.exists("/opt/rocm/llvm/bin/clang++") else None
 openmp = [] if sysconfig.get_platform().startswith("macosx") else ["-fopenmp"]
-includes = [sysconfig.get_paths()["include"], os.path.dirname(os.path.abspath(__file__))]
+includes = [sysconfig.get_paths()["include"]]
 
 
 class BuildGPU(build_ext):

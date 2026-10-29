@@ -5,7 +5,8 @@
  *  @brief Accumulator types the CPU and GPU kernels share.
  */
 #pragma once
-#include <cstdint>     // `std::uint32_t`, `std::int64_t`
+#include <cstdint> // `std::uint32_t`, `std::int64_t`
+
 #include <type_traits> // `std::conditional_t`
 
 namespace ashvardanian::fatwheels {

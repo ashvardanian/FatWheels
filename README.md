@@ -36,22 +36,16 @@ if fatwheels.hip:
 
 ## Installation
 
-I'd recommend forking the repository for your own projects, but you can also clone it directly:
+Fork it for your own project, or clone it and build in place:
 
-```bash
-git clone https://github.com/ashvardanian/FatWheels.git
-cd FatWheels
+```sh
+git clone https://github.com/ashvardanian/FatWheels.git && cd FatWheels
+uv sync --extra test                      # builds `_cuda` and `_hip` too, where NVCC or ROCm are found
+uv run pytest test.py -x                  # every kernel against the baseline
+uv run pytest --benchmark-enable bench.py # every kernel timed
 ```
 
-Once pulled down, you can build and run the project with `uv`:
-
-```bash
-uv pip install -e .[test]                   # builds `_cuda` and `_hip` too, where NVCC or ROCm are found
-uv run pytest test.py -s -x                 # test until first failure
-uv run pytest --benchmark-enable bench.py   # time every kernel
-```
-
-On Linux, Clang needs OpenMP's development package, like `libomp-dev`, and NVCC picks its host compiler from `CUDAHOSTCXX`.
+On Linux, Clang's OpenMP needs `libomp-dev`, and NVCC hosts on the compiler `CUDAHOSTCXX` names.
 
 ## Images
 
@@ -72,9 +66,9 @@ Each CI leg runs locally in its image:
 
 ```sh
 docker buildx build --target cpu --build-arg JOBS=8 --tag fatwheels:cpu .
-docker run --rm -v "$PWD:/work" -w /work fatwheels:cpu sh -c \
-    'clang++-23 --target=aarch64-linux-gnu -std=c++20 -O2 -fopenmp-simd -static -fuse-ld=lld -I. test.cpp -o test &&
-     qemu-aarch64 -cpu max,sve-max-vq=4 ./test'
+docker run --rm -v "$PWD:/work" -w /work fatwheels:cpu sh -c '
+    clang++-23 --target=aarch64-linux-gnu -std=c++20 -O2 -fopenmp-simd -static -fuse-ld=lld test.cpp -o test &&
+    qemu-aarch64 -cpu max,sve-max-vq=4 ./test'
 ```
 
 `JOBS` bounds the QEMU and GenMC compiles, which default to every core.
@@ -107,25 +101,3 @@ for target in cpu verify gpu; do
         ghcr.io/ashvardanian/fatwheels:$target-$commit-amd64 ghcr.io/ashvardanian/fatwheels:$target-$commit-arm64
 done
 ```
-
-## Reading Materials
-
-Beginner GPGPU:
-
-- High-level concepts: [nvidia.com](https://developer.nvidia.com/blog/even-easier-introduction-cuda/)
-- Nvidia CuPy UDFs: [cupy.dev](https://docs.cupy.dev/en/stable/user_guide/kernel.html)
-- CUDA in Python with Numba: [numba/nvidia-cuda-tutorial](https://github.com/numba/nvidia-cuda-tutorial)
-- C++ STL Parallelism on GPUs: [nvidia.com](https://developer.nvidia.com/blog/accelerating-standard-c-with-gpus-using-stdpar/)
-
-Advanced GPGPU:
-
-- CUDA math intrinsics: [nvidia.com](https://docs.nvidia.com/cuda/cuda-math-api/index.html)
-- Troubleshooting Nvidia hardware: [stas00/ml-engineering](https://github.com/stas00/ml-engineering/blob/master/compute/accelerator/nvidia/debug.md)
-- Nvidia ISA Generator with SM89 and SM90 codes: [kuterd/nv_isa_solver](https://github.com/kuterd/nv_isa_solver)
-- Multi GPU examples: [nvidia/multi-gpu-programming-models](https://github.com/NVIDIA/multi-gpu-programming-models)
-
-Communities:
-
-- CUDA MODE on [Discord](https://discord.com/invite/cudamode)
-- r/CUDA on [Reddit](https://www.reddit.com/r/CUDA/)
-- NVIDIA Developer Forums on [DevTalk](https://forums.developer.nvidia.com)

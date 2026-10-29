@@ -7,10 +7,9 @@
  *  Kernels, launches and Thrust read the same under both vendors, so the only vendor-specific code is the header
  *  HIP needs, @c synchronize, @c device_count, and the module's name.
  */
-#include "fatwheels/python.hpp"
+#include <cstddef> // `std::size_t`
+#include <cstring> // `std::strcmp`
 
-#include <cstddef>   // `std::size_t`
-#include <cstring>   // `std::strcmp`
 #include <exception> // `std::exception`
 #include <stdexcept> // `std::runtime_error`
 
@@ -24,11 +23,12 @@
 #include <thrust/execution_policy.h>
 #include <thrust/reduce.h>
 
-#include "fatwheels/types.hpp"
+#include "python.hpp"
+#include "types.hpp"
 
 namespace fw = ashvardanian::fatwheels;
 
-namespace ashvardanian::fatwheels::python {
+namespace ashvardanian::fatwheels {
 
 /** Waits for the launched kernels, rethrowing a launch or execution error. */
 static void synchronize() {
@@ -157,6 +157,10 @@ static bool matrix_from_python(Py_buffer const &view, char const *label, cell_id
                                cell_idx_t &columns) noexcept {
     if (view.ndim != 2) {
         PyErr_Format(PyExc_ValueError, "%s must be rank-2, not rank-%d", label, view.ndim);
+        return false;
+    }
+    if (view.shape[0] * view.shape[1] >= Py_ssize_t {1} << 32) {
+        PyErr_Format(PyExc_ValueError, "%s spans 2^32 elements or more, past what 32-bit indices reach", label);
         return false;
     }
     rows = static_cast<cell_idx_t>(view.shape[0]);
@@ -341,10 +345,10 @@ static struct PyModuleDef gpu_module = {
 
 #pragma endregion Initialization
 
-} // namespace ashvardanian::fatwheels::python
+} // namespace ashvardanian::fatwheels
 
 #if defined(__HIP__)
-extern "C" PyMODINIT_FUNC PyInit__hip(void) { return PyModuleDef_Init(&fw::python::gpu_module); }
+extern "C" PyMODINIT_FUNC PyInit__hip(void) { return PyModuleDef_Init(&fw::gpu_module); }
 #else
-extern "C" PyMODINIT_FUNC PyInit__cuda(void) { return PyModuleDef_Init(&fw::python::gpu_module); }
+extern "C" PyMODINIT_FUNC PyInit__cuda(void) { return PyModuleDef_Init(&fw::gpu_module); }
 #endif

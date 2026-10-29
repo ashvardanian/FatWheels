@@ -40,7 +40,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y libomp-dev
       - name: Build and Test
         run: |
-          pip install .[test]
+          pip install -e .[test]
           pytest test.py -x
 
   # The images are built on local machines and pushed, as the README's publishing steps show; pin them by commit.
@@ -63,7 +63,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
       - name: Cross-Compile
-        run: clang++-23 --target=${{ matrix.triple }} -std=c++20 -O2 -fopenmp-simd -static -fuse-ld=lld -I. test.cpp -o test
+        run: clang++-23 --target=${{ matrix.triple }} -std=c++20 -O2 -fopenmp-simd -static -fuse-ld=lld test.cpp -o test
       - name: Test
         run: qemu-${{ matrix.qemu }} -cpu ${{ matrix.cpu }} ./test
 
