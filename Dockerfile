@@ -16,22 +16,29 @@ ARG ROCM=rocm/dev-ubuntu-26.04:10.0.0-full
 ARG LLVM=23
 ARG TARGETARCH
 
-# Installs Clang, LLD, the LLVM tools and the sanitizer runtimes of each given major version from apt.llvm.org.
+# Installs the given packages of one LLVM major version from apt.llvm.org, by default Clang, LLD, the LLVM tools and
+# the sanitizer runtimes.
 FROM scratch AS scripts
 COPY --chmod=755 <<'EOF' /install-llvm
 #!/bin/sh
 set -eu
 . /etc/os-release
+version=$1
+shift
+[ $# -gt 0 ] || set -- "clang-$version" "lld-$version" "llvm-$version" "libclang-rt-$version-dev"
 keyring=/usr/share/keyrings/llvm.gpg
 [ -f "$keyring" ] || curl -fsSL https://apt.llvm.org/llvm-snapshot.gpg.key | gpg --dearmor -o "$keyring"
-packages=""
-for version in "$@"; do
-    echo "deb [signed-by=$keyring] http://apt.llvm.org/$VERSION_CODENAME/ llvm-toolchain-$VERSION_CODENAME-$version main" \
-        >"/etc/apt/sources.list.d/llvm-$version.list"
-    packages="$packages clang-$version lld-$version llvm-$version libclang-rt-$version-dev"
-done
+echo "deb [signed-by=$keyring] http://apt.llvm.org/$VERSION_CODENAME/ llvm-toolchain-$VERSION_CODENAME-$version main" \
+    >"/etc/apt/sources.list.d/llvm-$version.list"
 apt-get update
-apt-get install -y --no-install-recommends $packages
+apt-get install -y --no-install-recommends "$@"
+EOF
+# Keeps out what no build or check runs: GCC's LTO dumpers, LLVM's benchmark generator, and cuBLAS's 1 GB of static
+# archives, which NVCC never links unless asked.
+COPY <<'EOF' /dpkg-excludes
+path-exclude=/usr/bin/*lto-dump-*
+path-exclude=/usr/lib/llvm-*/bin/llvm-exegesis
+path-exclude=/usr/local/cuda-*/targets/*/lib/libcublas*_static.a
 EOF
 
 FROM ${UBUNTU} AS qemu
@@ -46,7 +53,7 @@ RUN curl -fsSLo /tmp/qemu.tar.xz "https://download.qemu.org/qemu-${QEMU_VERSION}
     echo "${QEMU_SHA256}  /tmp/qemu.tar.xz" | sha256sum -c - && \
     tar -xJf /tmp/qemu.tar.xz -C /tmp && \
     cd "/tmp/qemu-${QEMU_VERSION}" && \
-    ./configure --prefix=/opt/qemu --static --disable-system --disable-tools --disable-docs \
+    ./configure --prefix=/opt/qemu --static --disable-system --disable-tools --disable-docs -Dstrip=true \
         --target-list=aarch64-linux-user,x86_64-linux-user,riscv64-linux-user,loongarch64-linux-user,ppc64le-linux-user && \
     make -j"${JOBS:-$(nproc)}" install
 
@@ -59,6 +66,7 @@ LABEL org.opencontainers.image.source=https://github.com/ashvardanian/FatWheels 
       org.opencontainers.image.version=""
 ENV DEBIAN_FRONTEND=noninteractive
 COPY --from=scripts /install-llvm /usr/local/bin/install-llvm
+COPY --from=scripts /dpkg-excludes /etc/dpkg/dpkg.cfg.d/fatwheels
 RUN apt-get update && apt-get install -y --no-install-recommends \
         ca-certificates curl gnupg git cmake ninja-build make python3 xz-utils binutils && \
     install-llvm "${LLVM}" && \
@@ -74,24 +82,32 @@ RUN native=$(uname -m | tr _ -) && \
 COPY --from=qemu /opt/qemu/bin/ /usr/local/bin/
 RUN for emulator in /usr/local/bin/qemu-*; do ln -s "${emulator##*/}" "${emulator}-static"; done
 
+# GenMC v0.19 supports LLVM 19 to 22, and its passes lack the `printPipeline` LLVM 23's pass manager requires, so the
+# model checker and its clients compile with Clang 22 until a GenMC release supports 23.
+FROM cpu AS genmc
+ARG GENMC_COMMIT=9f6c4c0772d0c42b325681581acc6a0f3eb9b5f7
+ARG JOBS=
+RUN install-llvm 22 clang-22 llvm-22-dev && \
+    apt-get install -y --no-install-recommends libffi-dev zlib1g-dev libedit-dev
+RUN git init -q /tmp/genmc && \
+    git -C /tmp/genmc fetch -q --depth 1 https://github.com/MPI-SWS/genmc "${GENMC_COMMIT}" && \
+    git -C /tmp/genmc checkout -q FETCH_HEAD && \
+    cmake -S /tmp/genmc -B /tmp/genmc/build -G Ninja -D CMAKE_BUILD_TYPE=Release -D CMAKE_INSTALL_PREFIX=/opt/genmc \
+        -D CMAKE_C_COMPILER=clang-22 -D CMAKE_CXX_COMPILER=clang++-22 -D LLVM_DIR=/usr/lib/llvm-22/lib/cmake/llvm && \
+    cmake --build /tmp/genmc/build --parallel ${JOBS:-$(nproc)} && \
+    cmake --install /tmp/genmc/build --strip
+
 FROM cpu AS verify
 LABEL org.opencontainers.image.title="FatWheels Verify" \
       org.opencontainers.image.description="The CPU image plus GenMC and Spin, to model-check concurrent code"
-ARG GENMC_COMMIT=9f6c4c0772d0c42b325681581acc6a0f3eb9b5f7
-ARG JOBS=
-# GenMC v0.19 supports LLVM 19 to 22, and its passes lack the `printPipeline` LLVM 23's pass manager requires, so the
-# model checker and its clients compile with Clang 22 until a GenMC release supports 23.
-RUN install-llvm 22 && \
-    apt-get install -y --no-install-recommends llvm-22-dev libffi-dev zlib1g-dev libedit-dev spin && \
+# Spin preprocesses its models with `gcc`, which the cross compilers do not provide.
+RUN install-llvm 22 clang-22 && \
+    apt-get install -y --no-install-recommends gcc spin && \
     rm -rf /var/lib/apt/lists/*
-# The source tree stays, since `genmc` reads its client headers from there.
-RUN git init -q /opt/genmc && \
-    git -C /opt/genmc fetch -q --depth 1 https://github.com/MPI-SWS/genmc "${GENMC_COMMIT}" && \
-    git -C /opt/genmc checkout -q FETCH_HEAD && \
-    cmake -S /opt/genmc -B /opt/genmc/build -G Ninja -D CMAKE_BUILD_TYPE=Release \
-        -D CMAKE_C_COMPILER=clang-22 -D CMAKE_CXX_COMPILER=clang++-22 -D LLVM_DIR=/usr/lib/llvm-22/lib/cmake/llvm && \
-    cmake --build /opt/genmc/build --parallel ${JOBS:-$(nproc)}
-ENV GENMC=/opt/genmc/build/bin/genmc GENMC_CLANG=clang++-22
+# `genmc` links `libLLVM` from Clang 22 and includes its runtime headers in every client it compiles.
+COPY --from=genmc /opt/genmc/bin/genmc /opt/genmc/bin/
+COPY --from=genmc /opt/genmc/include/genmc/runtime/ /opt/genmc/include/genmc/runtime/
+ENV GENMC=/opt/genmc/bin/genmc GENMC_CLANG=clang++-22
 
 # AMD's image carries every precompiled ROCm math and ML library, about 30 GB of them. HIP compilation
 # needs only ROCm's Clang, without its Fortran and MLIR parts, the HIP runtime and the headers: about 1 GB.
@@ -120,13 +136,14 @@ LABEL org.opencontainers.image.source=https://github.com/ashvardanian/FatWheels 
       org.opencontainers.image.version=""
 ENV DEBIAN_FRONTEND=noninteractive
 COPY --from=scripts /install-llvm /usr/local/bin/install-llvm
+COPY --from=scripts /dpkg-excludes /etc/dpkg/dpkg.cfg.d/fatwheels
 RUN apt-get update && apt-get install -y --no-install-recommends \
         ca-certificates curl gnupg git cmake ninja-build make python3 python3-dev python3-venv xz-utils binutils && \
     repository=https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2604 && \
     platform=$(uname -m | sed 's/aarch64/sbsa/') && \
     curl -fsSLo /tmp/cuda-keyring.deb "${repository}/${platform}/cuda-keyring_1.1-1_all.deb" && \
     dpkg -i /tmp/cuda-keyring.deb && rm /tmp/cuda-keyring.deb && \
-    install-llvm 22 "${LLVM}" && \
+    install-llvm 22 clang-22 && install-llvm "${LLVM}" && \
     suffix=$(echo "${CUDA}" | tr . -) && \
     apt-get install -y --no-install-recommends "libomp-${LLVM}-dev" \
         "cuda-minimal-build-${suffix}" "cuda-driver-dev-${suffix}" "libcublas-dev-${suffix}" && \

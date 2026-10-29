@@ -87,8 +87,9 @@ jobs:
         uses: actions/checkout@v7
       - name: Build
         run: python3 -m venv /venv && /venv/bin/pip install .
+      # `-P` keeps the checkout off `sys.path`, whose `fatwheels/` holds no compiled modules.
       - name: Check the GPU Modules Import and the CPU Module Links No GPU Runtime
         run: |
-          /venv/bin/python -c "import ${{ matrix.modules }}"
-          cpu=$(/venv/bin/python -c "import fatwheels._cpu as module; print(module.__file__)")
+          /venv/bin/python -P -c "import ${{ matrix.modules }}"
+          cpu=$(/venv/bin/python -P -c "import fatwheels._cpu as module; print(module.__file__)")
           ! readelf -d "$cpu" | grep -E 'NEEDED.*(libcudart|libcuda\.|libamdhip64)'
