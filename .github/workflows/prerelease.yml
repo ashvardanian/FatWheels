@@ -24,7 +24,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-26.04, ubuntu-26.04-arm, macos-15]
+        os: [ubuntu-26.04, ubuntu-26.04-arm, macos-26]
     env:
       CC: clang
       CXX: clang++
@@ -34,7 +34,8 @@ jobs:
       - name: Set Up Python
         uses: actions/setup-python@v7
         with:
-          python-version: "3.14"
+          # numba ships 3.14t wheels but no 3.15t yet
+          python-version: "3.14t"
       - name: Install OpenMP for Clang
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y libomp-dev
@@ -43,11 +44,11 @@ jobs:
           pip install -e .[test]
           pytest test.py -x
 
-  # The images are built on local machines and pushed, as the README's publishing steps show; pin them by commit.
+  # The images are built on local machines and pushed, as the README's publishing steps show; pin them by digest.
   test_qemu:
     name: Test ${{ matrix.triple }} under QEMU with ${{ matrix.cpu }}
     runs-on: ubuntu-26.04
-    container: ghcr.io/ashvardanian/fatwheels:cpu
+    container: ghcr.io/ashvardanian/fatwheels:cpu@sha256:1efa571e59262693914e577d3d68530fc102ea4a45f26a8740d73ddb5b32aef7
     strategy:
       fail-fast: false
       matrix:
@@ -72,7 +73,7 @@ jobs:
   build_gpu:
     name: Build GPU Modules on ${{ matrix.arch }}
     runs-on: ${{ matrix.arch == 'arm64' && 'ubuntu-26.04-arm' || 'ubuntu-26.04' }}
-    container: ghcr.io/ashvardanian/fatwheels:gpu
+    container: ghcr.io/ashvardanian/fatwheels:gpu@sha256:4003c633da0c7f69688c17130fcc56e4f7dcc804a24062bceee30a2c0a92511a
     strategy:
       fail-fast: false
       matrix:

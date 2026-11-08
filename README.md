@@ -88,10 +88,11 @@ Each machine builds its own architecture natively, an x86-64 Linux box for `amd6
 ```sh
 arch=$(docker version --format '{{.Server.Arch}}') commit=$(git rev-parse --short=7 HEAD)
 for target in cpu verify gpu; do
-    docker buildx build --target $target --tag ghcr.io/ashvardanian/fatwheels:$target-$commit-$arch --push .
+    docker buildx build --target $target --provenance=false --tag ghcr.io/ashvardanian/fatwheels:$target-$commit-$arch --push .
 done
 ```
 
+Without `--provenance=false`, BuildKit wraps each image with an attestation that GHCR lists as an `unknown/unknown` platform.
 Once both architectures are up, either machine joins them into the multi-architecture tags that workflows pin:
 
 ```sh
