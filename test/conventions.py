@@ -183,14 +183,79 @@ def check_rocm(execute: bool) -> None:
         report(result.returncode == 0, "every generation the driver loads matches serial", result.stdout.splitlines()[0])
 
 
+def build_example(name: str, *definitions: str) -> Path:
+    """Configures and builds `example/` as its own project, as a downstream user would."""
+    tree = root / f"build_example_{name}"
+    arguments = [argument for definition in definitions for argument in ("-D", definition)]
+    run("cmake", "-S", root / "example", "-B", tree, "-G", "Ninja", "-D", "CMAKE_C_COMPILER=clang-23", *arguments)
+    run("cmake", "--build", tree)
+    return tree
+
+
+def check_example_sources() -> None:
+    sources = "".join(path.read_text() for path in (root / "example").iterdir() if path.is_file())
+    internals = sorted(set(re.findall(r"FATWHEELS_ARCH_\w+|\bfw_\w+_\b|fatwheels_\w+_\b", sources)))
+    report(not internals, "the example names no library internal", ", ".join(internals))
+
+
+def check_example_cpu() -> None:
+    example = build_example("cpu")
+    for unit in ("serial", "haswell", "sapphireamx"):
+        listed = run("nm", example / f"CMakeFiles/example_cpu.dir/{unit}.c.o").stdout
+        kernels = set(re.findall(r" [Tt] (fw_matmul_f32_\w+)", listed))
+        report(kernels == {f"fw_matmul_f32_{unit}"}, f"the example's {unit} unit carries its own kernel and no other", str(kernels))
+    sde = shutil.which("sde64") or os.environ.get("SDE")
+    for name, prefix in [("native", [])] + ([("SDE Sapphire Rapids", [sde, "-spr", "--"])] if sde else []):
+        result = run(*prefix, example / "example_cpu", check=False)
+        report(result.returncode == 0, f"the example's kernels match serial, {name}", " ".join(result.stdout.split()))
+
+
+def check_example_cuda(execute: bool) -> None:
+    example = build_example("cuda", "FATWHEELS_CUDA_ARCH=80;89;120")
+    fatbin = example / "embedded/example_ada.fatbin"
+    entries, globals_ = cubin_symbols(fatbin)
+    report(entries == {"example_score_ada_kernel"} and not globals_,
+           "the example's Ada fatbin holds its one kernel and no library kernel or table", f"{entries} {globals_}")
+    report("QMMA" in run("cuobjdump", "-sass", fatbin).stdout, "the example's kernel emits `QMMA` from the Ada block")
+    leaky = example / "example_ada_with_target.fatbin"
+    run("nvcc", "-fatbin", "-arch=sm_89", "-DFATWHEELS_TARGET_ADA=1", "-I", root / "c", "-I", root / "include",
+        root / "example/ada.cu", "-o", leaky)
+    entries, _ = cubin_symbols(leaky)
+    report(any("fw_matmul_f32_ada" in entry for entry in entries),
+           "the same unit with the library's Ada target on ships the library's kernels", f"{len(entries)} entries")
+    if execute:
+        result = run(example / "example_gpu", check=False)
+        report(result.returncode == 0, "the example's fatbin loads through the CUDA services and matches serial", result.stdout.strip())
+
+
+def check_example_rocm(execute: bool) -> None:
+    example = build_example("rocm", "CMAKE_HIP_COMPILER=/opt/rocm/llvm/bin/clang++", "CMAKE_PREFIX_PATH=/opt/rocm",
+                            "FATWHEELS_ROCM_ARCH=gfx942")
+    code = example / "embedded/example_cdna3.hsaco"
+    listed = run("/opt/rocm/llvm/bin/llvm-readelf", "--symbols", code).stdout.splitlines()
+    kernels = {fields[7] for fields in map(str.split, listed)
+               if len(fields) == 8 and (fields[3] == "FUNC" or fields[7].endswith(".kd"))}
+    report(kernels == {"example_score_cdna3_kernel", "example_score_cdna3_kernel.kd"},
+           "the example's CDNA3 code object holds its one kernel and no library kernel", str(kernels))
+    listing = run("/opt/rocm/llvm/bin/llvm-objdump", "-d", "--mcpu=gfx942", code).stdout
+    report("v_mfma_f32_16x16x16_bf16" in listing, "the example's kernel emits `v_mfma_f32_16x16x16_bf16` from the CDNA3 block")
+    if execute:
+        result = run(example / "example_gpu", check=False)
+        report(result.returncode == 0, "the example's code object loads through the ROCm services and matches serial", result.stdout.strip())
+
+
 if __name__ == "__main__":
     mode, execute = (sys.argv[1] if len(sys.argv) > 1 else "cpu"), "--run" in sys.argv
     check_sources()
+    check_example_sources()
     if mode == "cpu":
         check_cpu()
+        check_example_cpu()
     if mode == "gpu" and shutil.which("nvcc"):
         check_cuda(execute)
+        check_example_cuda(execute)
     if mode == "gpu" and Path("/opt/rocm/llvm/bin/clang").exists():
         check_rocm(execute)
+        check_example_rocm(execute)
     print(f"{len(failures)} failed" if failures else "all passed")
     sys.exit(1 if failures else 0)

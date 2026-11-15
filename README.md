@@ -14,6 +14,7 @@ It is small enough to read in an afternoon, so the build design is what you read
   `test/conventions.py` turns every rule below into PASS or FAIL, and the [images](#images) carry every tool it needs: Intel SDE for AVX-512 and AMX, QEMU for SVE and SME, CUDA and ROCm for both GPU vendors.
 
 There is one operation, `matmul`, written once per capability with its hardware's own matrix instruction.
+[`example/`](https://github.com/ashvardanian/FatWheels/blob/main/example/README.md) shows how a higher-level project reuses its probe verdicts, kernels and GPU building blocks, and nothing else.
 
 ## Two Flags
 
