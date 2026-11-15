@@ -25,72 +25,41 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-26.04, ubuntu-26.04-arm, macos-26]
-    env:
-      CC: clang
-      CXX: clang++
     steps:
       - name: Checkout
         uses: actions/checkout@v7
       - name: Set Up Python
         uses: actions/setup-python@v7
         with:
-          # numba ships 3.14t wheels but no 3.15t yet
           python-version: "3.14t"
-      - name: Install OpenMP for Clang
-        if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y libomp-dev
       - name: Build and Test
         run: |
-          pip install -e .[test]
-          pytest test.py -x
+          pip install .[test]
+          pytest test/matmul.py -x
 
   # The images are built on local machines and pushed, as the README's publishing steps show; pin them by digest.
-  test_qemu:
-    name: Test ${{ matrix.triple }} under QEMU with ${{ matrix.cpu }}
+  check_cpu:
+    name: Check CPU Capabilities under SDE and QEMU
     runs-on: ubuntu-26.04
     container: ghcr.io/ashvardanian/fatwheels:cpu@sha256:1efa571e59262693914e577d3d68530fc102ea4a45f26a8740d73ddb5b32aef7
-    strategy:
-      fail-fast: false
-      matrix:
-        # Ubuntu 26.04's RISC-V C library targets RVA23, whose vector extension it uses itself, so every RISC-V row
-        # has one; each run still checks the vector kernels against the serial ones.
-        include:
-          - { triple: aarch64-linux-gnu, qemu: aarch64, cpu: "max,sve=off" }
-          - { triple: aarch64-linux-gnu, qemu: aarch64, cpu: "max,sve-max-vq=1" }
-          - { triple: aarch64-linux-gnu, qemu: aarch64, cpu: "max,sve-max-vq=4" }
-          - { triple: riscv64-linux-gnu, qemu: riscv64, cpu: "rva23u64" }
-          - { triple: riscv64-linux-gnu, qemu: riscv64, cpu: "rva23u64,vlen=512" }
     steps:
       - name: Checkout
         uses: actions/checkout@v7
-      - name: Cross-Compile
-        run: clang++-23 --target=${{ matrix.triple }} -std=c++20 -O2 -fopenmp-simd -static -fuse-ld=lld test.cpp -o test
-      - name: Test
-        run: qemu-${{ matrix.qemu }} -cpu ${{ matrix.cpu }} ./test
+      - name: Check
+        run: python3 test/conventions.py cpu
 
-  # No hosted runner has a GPU, so this checks that each vendor's module builds and imports: both on x86-64,
-  # and NVIDIA's alone on Arm, as Grace Hopper builds it.
-  build_gpu:
-    name: Build GPU Modules on ${{ matrix.arch }}
+  # No hosted runner has a GPU, so this checks compiles, kernel entries and the instructions each generation emits:
+  # both vendors on x86-64, and NVIDIA's alone on Arm, as Grace Hopper builds it.
+  check_gpu:
+    name: Check GPU Generations on ${{ matrix.arch }}
     runs-on: ${{ matrix.arch == 'arm64' && 'ubuntu-26.04-arm' || 'ubuntu-26.04' }}
     container: ghcr.io/ashvardanian/fatwheels:gpu@sha256:4003c633da0c7f69688c17130fcc56e4f7dcc804a24062bceee30a2c0a92511a
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - { arch: amd64, modules: "fatwheels._cuda, fatwheels._hip" }
-          - { arch: arm64, modules: "fatwheels._cuda" }
-    env:
-      CC: clang-23
-      CXX: clang++-23
+        arch: [amd64, arm64]
     steps:
       - name: Checkout
         uses: actions/checkout@v7
-      - name: Build
-        run: python3 -m venv /venv && /venv/bin/pip install .
-      # `-P` keeps the checkout off `sys.path`, whose `fatwheels/` holds no compiled modules.
-      - name: Check the GPU Modules Import and the CPU Module Links No GPU Runtime
-        run: |
-          /venv/bin/python -P -c "import ${{ matrix.modules }}"
-          cpu=$(/venv/bin/python -P -c "import fatwheels._cpu as module; print(module.__file__)")
-          ! readelf -d "$cpu" | grep -E 'NEEDED.*(libcudart|libcuda\.|libamdhip64)'
+      - name: Check
+        run: python3 test/conventions.py gpu

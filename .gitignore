@@ -11,9 +11,7 @@
 *.o
 *.png
 __pycache__
-build_debug
-build_release
+build_*
 .DS_Store
 /build
 /dist
-/test

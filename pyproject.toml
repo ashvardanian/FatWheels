@@ -1,50 +1,40 @@
 [build-system]
-requires = ["setuptools>=77"]
-build-backend = "setuptools.build_meta"
+build-backend = "scikit_build_core.build"
+requires = ["scikit-build-core>=0.11"]
 
 [project]
-name = "fatwheels"
+authors = [{ email = "1983160+ashvardanian@users.noreply.github.com", name = "Ash Vardanian" }]
+dependencies = ["numpy"]
+description = "Multiversioned and monoversioned builds of SIMD and GPU kernels, and the images that validate them"
 dynamic = ["version"]
-description = "Starter kit for one Python wheel carrying multi-versioned CPU kernels and both NVIDIA and AMD GPU modules"
-readme = "README.md"
-requires-python = ">=3.12"
 license = "Apache-2.0"
 license-files = ["LICENSE"]
-authors = [{ name = "Ash Vardanian", email = "1983160+ashvardanian@users.noreply.github.com" }]
+name = "fatwheels"
+readme = "README.md"
+requires-python = ">=3.12"
 urls = { Homepage = "https://github.com/ashvardanian/FatWheels" }
-dependencies = ["numpy"]
 
 [project.optional-dependencies]
-test = ["pytest", "pytest-benchmark", "numba"]
+test = ["pytest"]
 
-[tool.setuptools]
-packages = ["fatwheels"]
+[tool.scikit-build]
+build-dir = "build_python/{wheel_tag}"
+install.components = ["fatwheels_python"]
+sdist.exclude = ["build*"]
+wheel.packages = ["python/fatwheels"]
 
-[tool.setuptools.package-data]
-fatwheels = ["__init__.pyi", "py.typed"]
+[tool.scikit-build.cmake.define]
+FATWHEELS_BUILD_PYTHON = "ON"
+FATWHEELS_BUILD_TEST = "OFF"
+FATWHEELS_CUDA_ARCH = { default = "", env = "FATWHEELS_CUDA_ARCH" }
+FATWHEELS_MARCH = { default = "", env = "FATWHEELS_MARCH" }
+FATWHEELS_ROCM_ARCH = { default = "", env = "FATWHEELS_ROCM_ARCH" }
 
-[tool.setuptools.dynamic]
-version = { file = "VERSION" }
+[tool.scikit-build.metadata.version]
+input = "VERSION"
+provider = "scikit_build_core.metadata.regex"
+regex = "(?P<value>.+)"
 
 [tool.ruff]
-target-version = "py312"
 line-length = 120
-
-[tool.ruff.format]
-quote-style = "double"
-
-[tool.ruff.lint]
-extend-select = ["D", "I", "TID"]
-
-[tool.ruff.lint.flake8-tidy-imports]
-ban-relative-imports = "all"
-
-[tool.ruff.lint.pydocstyle]
-convention = "google"
-
-[tool.ruff.lint.per-file-ignores]
-"!fatwheels/**" = ["D"]
-
-[tool.ruff.lint.isort]
-known-first-party = ["fatwheels"]
-combine-as-imports = true
+target-version = "py312"

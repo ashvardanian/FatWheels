@@ -1,0 +1,102 @@
+{
+    "version": 6,
+    "configurePresets": [
+        {
+            "name": "base",
+            "hidden": true,
+            "generator": "Ninja",
+            "binaryDir": "${sourceDir}/build_${presetName}",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release"
+            }
+        },
+        {
+            "name": "clang-floor",
+            "displayName": "Clang at the compiler's own floor, where every capability comes from a probe",
+            "inherits": "base",
+            "cacheVariables": {
+                "CMAKE_C_COMPILER": "clang-23"
+            }
+        },
+        {
+            "name": "gcc-floor",
+            "displayName": "GCC at x86-64-v3, whose predefines already enable Haswell",
+            "inherits": "base",
+            "cacheVariables": {
+                "CMAKE_C_COMPILER": "gcc-15",
+                "FATWHEELS_MARCH": "x86-64-v3"
+            }
+        },
+        {
+            "name": "gcc-monoversioned",
+            "displayName": "GCC at x86-64-v3, keeping only what the floor implies",
+            "inherits": "gcc-floor",
+            "cacheVariables": {
+                "FATWHEELS_MULTIVERSIONED": "OFF"
+            }
+        },
+        {
+            "name": "clang-without-amx",
+            "displayName": "Clang at its floor with Sapphire AMX's kernels dropped",
+            "inherits": "clang-floor",
+            "cacheVariables": {
+                "FATWHEELS_TARGET_SAPPHIREAMX": "0"
+            }
+        },
+        {
+            "name": "aarch64-qemu",
+            "displayName": "Clang cross-compiling for AArch64, run under QEMU",
+            "inherits": "base",
+            "toolchainFile": "${sourceDir}/cmake/toolchain-aarch64-gnu.cmake"
+        },
+        {
+            "name": "cuda",
+            "displayName": "Clang for the host, NVCC for Ampere, Ada and Blackwell codes",
+            "inherits": "clang-floor",
+            "cacheVariables": {
+                "FATWHEELS_CUDA_ARCH": "80;89;120"
+            }
+        },
+        {
+            "name": "rocm",
+            "displayName": "ROCm's Clang for CDNA3",
+            "inherits": "base",
+            "cacheVariables": {
+                "CMAKE_C_COMPILER": "clang-23",
+                "CMAKE_HIP_COMPILER": "/opt/rocm/llvm/bin/clang++",
+                "CMAKE_PREFIX_PATH": "/opt/rocm",
+                "FATWHEELS_ROCM_ARCH": "gfx942"
+            }
+        }
+    ],
+    "buildPresets": [
+        {
+            "name": "clang-floor",
+            "configurePreset": "clang-floor"
+        },
+        {
+            "name": "gcc-floor",
+            "configurePreset": "gcc-floor"
+        },
+        {
+            "name": "gcc-monoversioned",
+            "configurePreset": "gcc-monoversioned"
+        },
+        {
+            "name": "clang-without-amx",
+            "configurePreset": "clang-without-amx"
+        },
+        {
+            "name": "aarch64-qemu",
+            "configurePreset": "aarch64-qemu"
+        },
+        {
+            "name": "cuda",
+            "configurePreset": "cuda"
+        },
+        {
+            "name": "rocm",
+            "configurePreset": "rocm"
+        }
+    ]
+}

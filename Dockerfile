@@ -3,8 +3,8 @@
 # Toolchain images for building and validating code that ships multi-versioned CPU kernels and
 # NVIDIA and AMD GPU code in one package. FatWheels' CI runs in them, and so can any other project's.
 #
-# - `cpu`: Clang 23, static QEMU user-mode and GCC 15 sysroots, to cross-compile every CPU
-#   capability and run it under emulation.
+# - `cpu`: Clang 23, GCC 15, static QEMU user-mode, GCC 15 sysroots and, on x86-64, Intel SDE, to cross-compile
+#   every CPU capability and run it under emulation.
 # - `verify`: `cpu` plus GenMC and Spin, to model-check concurrent code.
 # - `gpu`: CUDA 13.4, plus ROCm 10.0 on x86-64, to compile NVIDIA and AMD device code side by side.
 #
@@ -57,18 +57,33 @@ RUN curl -fsSLo /tmp/qemu.tar.xz "https://download.qemu.org/qemu-${QEMU_VERSION}
         --target-list=aarch64-linux-user,x86_64-linux-user,riscv64-linux-user,loongarch64-linux-user,ppc64le-linux-user && \
     make -j"${JOBS:-$(nproc)}" install
 
+# SDE emulates the x86 capabilities QEMU lacks, AVX-512 and AMX among them; Intel's licence allows redistributing it
+# unmodified with its notices, which stay in `/opt/sde/Licenses`.
+FROM ${UBUNTU} AS sde-amd64
+ARG SDE_VERSION=9.53.0-2025-03-16
+ARG SDE_SHA256=f55138df53378198e8c0a89598351cdb3c5e7f8819e63e472b0bc179afaad34c
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl xz-utils && \
+    curl -fsSLo /tmp/sde.tar.xz "https://downloadmirror.intel.com/850782/sde-external-${SDE_VERSION}-lin.tar.xz" && \
+    echo "${SDE_SHA256}  /tmp/sde.tar.xz" | sha256sum -c - && \
+    mkdir -p /opt/sde && tar -xJf /tmp/sde.tar.xz --strip-components=1 -C /opt/sde
+
+FROM ${UBUNTU} AS sde-arm64
+RUN mkdir -p /opt/sde
+
+FROM sde-${TARGETARCH} AS sde
+
 FROM ${UBUNTU} AS cpu
 ARG LLVM
 # Every stage inherits Ubuntu's own title, description and version labels unless it sets its own.
 LABEL org.opencontainers.image.source=https://github.com/ashvardanian/FatWheels \
       org.opencontainers.image.title="FatWheels CPU" \
-      org.opencontainers.image.description="Clang 23, QEMU and cross sysroots to build and emulate CPU capabilities" \
+      org.opencontainers.image.description="Clang 23, GCC 15, QEMU, SDE and cross sysroots to build and emulate CPU capabilities" \
       org.opencontainers.image.version=""
 ENV DEBIAN_FRONTEND=noninteractive
 COPY --from=scripts /install-llvm /usr/local/bin/install-llvm
 COPY --from=scripts /dpkg-excludes /etc/dpkg/dpkg.cfg.d/fatwheels
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        ca-certificates curl gnupg git cmake ninja-build make python3 xz-utils binutils && \
+        ca-certificates curl gnupg git cmake ninja-build make python3 xz-utils binutils gcc-15 g++-15 && \
     install-llvm "${LLVM}" && \
     apt-get install -y --no-install-recommends "libomp-${LLVM}-dev" && \
     rm -rf /var/lib/apt/lists/*
@@ -81,6 +96,8 @@ RUN native=$(uname -m | tr _ -) && \
     rm -rf /var/lib/apt/lists/*
 COPY --from=qemu /opt/qemu/bin/ /usr/local/bin/
 RUN for emulator in /usr/local/bin/qemu-*; do ln -s "${emulator##*/}" "${emulator}-static"; done
+COPY --from=sde /opt/sde /opt/sde
+RUN if [ -x /opt/sde/sde64 ]; then ln -s /opt/sde/sde64 /usr/local/bin/sde64; else rm -r /opt/sde; fi
 
 # GenMC v0.19 supports LLVM 19 to 22, and its passes lack the `printPipeline` LLVM 23's pass manager requires, so the
 # model checker and its clients compile with Clang 22 until a GenMC release supports 23.
@@ -115,6 +132,8 @@ FROM ${ROCM} AS rocm-amd64
 RUN mkdir -p /rocm && cd /opt/rocm/core && \
     tar -cf - --no-wildcards-match-slash \
         --exclude='lib/llvm/lib/*.a' --exclude='lib/llvm/lib/*MLIR*' --exclude='lib/llvm/lib/*mlir*' \
+        --exclude='lib/llvm/bin/*flang*' --exclude='lib/llvm/bin/mlir-*' --exclude='lib/llvm/bin/fir-opt' \
+        --exclude='lib/llvm/bin/bbc' --exclude='lib/llvm/bin/tco' \
         include libexec share/hip lib/cmake lib/llvm lib/rocm_sysdeps bin/hip* lib/libamdhip64.so* \
         lib/libhsa-runtime64.so* lib/libamd_comgr.so* lib/librocm_kpack.so* lib/librocprofiler-register.so* | \
         tar -xf - -C /rocm
@@ -146,7 +165,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     install-llvm 22 clang-22 && install-llvm "${LLVM}" && \
     suffix=$(echo "${CUDA}" | tr . -) && \
     apt-get install -y --no-install-recommends "libomp-${LLVM}-dev" \
-        "cuda-minimal-build-${suffix}" "cuda-driver-dev-${suffix}" "libcublas-dev-${suffix}" && \
+        "cuda-minimal-build-${suffix}" "cuda-driver-dev-${suffix}" "cuda-nvdisasm-${suffix}" "libcublas-dev-${suffix}" && \
     rm -rf /var/lib/apt/lists/*
 # AMD's own layout: the versioned tree behind `core`, and the paths CMake and Clang look for linked to it.
 COPY --from=rocm /rocm /opt/rocm/core
