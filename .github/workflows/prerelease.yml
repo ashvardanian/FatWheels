@@ -48,6 +48,29 @@ jobs:
       - name: Check
         run: python3 test/conventions.py cpu
 
+  # Each emulated CPU is its own row: QEMU for SVE and SME, Intel SDE for the AVX-512 and AMX that QEMU lacks.
+  test_emulated:
+    name: Test ${{ matrix.preset }} under ${{ matrix.emulator }}
+    runs-on: ubuntu-26.04
+    container: ghcr.io/ashvardanian/fatwheels:cpu@sha256:1efa571e59262693914e577d3d68530fc102ea4a45f26a8740d73ddb5b32aef7
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { preset: aarch64-qemu, emulator: "qemu-aarch64 -cpu max,sve=off,sme=off" }
+          - { preset: aarch64-qemu, emulator: "qemu-aarch64 -cpu max,sme=off,sve-max-vq=1" }
+          - { preset: aarch64-qemu, emulator: "qemu-aarch64 -cpu max,sme=off,sve-max-vq=4" }
+          - { preset: aarch64-qemu, emulator: "qemu-aarch64 -cpu max,sve-max-vq=4,sme-default-vector-length=64" }
+          - { preset: clang-floor, emulator: "sde64 -skx --" }
+          - { preset: clang-floor, emulator: "sde64 -spr --" }
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+      - name: Build
+        run: cmake --preset ${{ matrix.preset }} && cmake --build --preset ${{ matrix.preset }}
+      - name: Test
+        run: ${{ matrix.emulator }} build_${{ matrix.preset }}/fatwheels_test
+
   # No hosted runner has a GPU, so this checks compiles, kernel entries and the instructions each generation emits:
   # both vendors on x86-64, and NVIDIA's alone on Arm, as Grace Hopper builds it.
   check_gpu:
