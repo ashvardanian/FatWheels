@@ -41,18 +41,18 @@ jobs:
   check_cpu:
     name: Check CPU Capabilities under SDE and QEMU
     runs-on: ubuntu-26.04
-    container: ghcr.io/ashvardanian/fatwheels:cpu@sha256:1efa571e59262693914e577d3d68530fc102ea4a45f26a8740d73ddb5b32aef7
+    container: ghcr.io/ashvardanian/fatwheels:cpu@sha256:644a4ce0011feb651a2011d6e2a08400fa4ea8015787e33e62e1a88dc1cd1009
     steps:
       - name: Checkout
         uses: actions/checkout@v7
       - name: Check
-        run: python3 test/conventions.py cpu
+        run: python3 -m pytest test/conventions.py -m cpu
 
   # Each emulated CPU is its own row: QEMU for SVE and SME, Intel SDE for the AVX-512 and AMX that QEMU lacks.
   test_emulated:
     name: Test ${{ matrix.preset }} under ${{ matrix.emulator }}
     runs-on: ubuntu-26.04
-    container: ghcr.io/ashvardanian/fatwheels:cpu@sha256:1efa571e59262693914e577d3d68530fc102ea4a45f26a8740d73ddb5b32aef7
+    container: ghcr.io/ashvardanian/fatwheels:cpu@sha256:644a4ce0011feb651a2011d6e2a08400fa4ea8015787e33e62e1a88dc1cd1009
     strategy:
       fail-fast: false
       matrix:
@@ -76,7 +76,7 @@ jobs:
   check_gpu:
     name: Check GPU Generations on ${{ matrix.arch }}
     runs-on: ${{ matrix.arch == 'arm64' && 'ubuntu-26.04-arm' || 'ubuntu-26.04' }}
-    container: ghcr.io/ashvardanian/fatwheels:gpu@sha256:4003c633da0c7f69688c17130fcc56e4f7dcc804a24062bceee30a2c0a92511a
+    container: ghcr.io/ashvardanian/fatwheels:gpu@sha256:1ae7b480bfe25fc0d337137ac4aa2f550554bf697160a788616136c8a6728df2
     strategy:
       fail-fast: false
       matrix:
@@ -85,4 +85,4 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
       - name: Check
-        run: python3 test/conventions.py gpu
+        run: python3 -m pytest test/conventions.py -m "cuda or rocm"

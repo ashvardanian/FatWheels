@@ -44,8 +44,8 @@ static __device__ __forceinline__ unsigned fw_pack_bf16x2_ampere(fw_f32_t low, f
 /** Building block: @p c += A * B over a 16 by 16 bf16 A and a 16 by 8 bf16 B. */
 static __device__ __forceinline__ void fw_mma_bf16_ampere(fw_f32_t *c, unsigned const *a, unsigned b_low,
                                                           unsigned b_high) {
-    asm volatile("mma.sync.aligned.m16n8k16.row.col.f32.bf16.bf16.f32 {%0, %1, %2, %3}, {%4, %5, %6, %7}, " "{%8, %9}, "
-                                                                                                            "{%0, %1, " "%2, %3};"
+    asm volatile("mma.sync.aligned.m16n8k16.row.col.f32.bf16.bf16.f32 " //
+                 "{%0, %1, %2, %3}, {%4, %5, %6, %7}, {%8, %9}, {%0, %1, %2, %3};\n"
                  : "+f"(c[0]), "+f"(c[1]), "+f"(c[2]), "+f"(c[3])
                  : "r"(a[0]), "r"(a[1]), "r"(a[2]), "r"(a[3]), "r"(b_low), "r"(b_high));
 }
@@ -63,15 +63,16 @@ static __device__ __forceinline__ void fw_store_fragment_ampere(fw_f32_t const *
     }
 }
 
-#if FATWHEELS_TARGET_AMPERE || FATWHEELS_TARGET_ADA
-/** Without depth there is nothing to multiply, so Ampere and Ada launch this instead of their `mma.sync` kernels. */
-static __global__ void fw_zero_f32_ampere_kernel_(fw_f32_t *c, fw_size_t count) {
+/** Building block: zeroes one element of C per thread, for generations whose kernels need depth to multiply. */
+static __device__ __forceinline__ void fw_zero_f32_ampere(fw_f32_t *c, fw_size_t count) {
     fw_size_t const index = (fw_size_t)blockIdx.x * blockDim.x + threadIdx.x;
     if (index < count) c[index] = 0;
 }
-#endif // FATWHEELS_TARGET_AMPERE || FATWHEELS_TARGET_ADA
 
 #if FATWHEELS_TARGET_AMPERE
+/** Without depth there is nothing to multiply, so the launcher runs this instead of the `mma.sync` kernel. */
+static __global__ void fw_zero_f32_ampere_kernel_(fw_f32_t *c, fw_size_t count) { fw_zero_f32_ampere(c, count); }
+
 /** The B registers of each 8-column half of a tile, as `fw_load_fragment_ampere` orders them. */
 static __device__ unsigned const fw_halves_ampere_[2][2] = {{0, 2}, {1, 3}};
 

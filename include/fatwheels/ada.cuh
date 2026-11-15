@@ -33,13 +33,16 @@ static __device__ __forceinline__ unsigned fw_pack_e4m3x4_ada(fw_f32_t const *va
 /** Building block: @p c += A * B over a 16 by 32 e4m3 A and a 32 by 8 e4m3 B. */
 static __device__ __forceinline__ void fw_mma_e4m3_ada(fw_f32_t *c, unsigned const *a, unsigned b_low,
                                                        unsigned b_high) {
-    asm volatile("mma.sync.aligned.m16n8k32.row.col.f32.e4m3.e4m3.f32 {%0, %1, %2, %3}, {%4, %5, %6, %7}, " "{%8, %9}, "
-                                                                                                            "{%0, %1, " "%2, %3};"
+    asm volatile("mma.sync.aligned.m16n8k32.row.col.f32.e4m3.e4m3.f32 " //
+                 "{%0, %1, %2, %3}, {%4, %5, %6, %7}, {%8, %9}, {%0, %1, %2, %3};\n"
                  : "+f"(c[0]), "+f"(c[1]), "+f"(c[2]), "+f"(c[3])
                  : "r"(a[0]), "r"(a[1]), "r"(a[2]), "r"(a[3]), "r"(b_low), "r"(b_high));
 }
 
 #if FATWHEELS_TARGET_ADA
+/** Ada's own zeroing kernel over Ampere's block, so each generation's unit owns every kernel it launches. */
+static __global__ void fw_zero_f32_ada_kernel_(fw_f32_t *c, fw_size_t count) { fw_zero_f32_ampere(c, count); }
+
 static __global__ void fw_matmul_f32_ada_kernel_(fw_f32_t const *a, fw_f32_t const *b, fw_f32_t *c, fw_size_t rows,
                                                  fw_size_t columns, fw_size_t depth) {
     __shared__ fw_f32_t tile_a[16][33], tile_b[16][33]; // `tile_b` holds B's columns as rows, as `.col` reads them
@@ -73,7 +76,7 @@ FATWHEELS_API fw_status_t fw_matmul_f32_ada(fw_f32_t const *a, fw_f32_t const *b
     dim3 const grid((unsigned)((columns + 15) / 16), (unsigned)((rows + 15) / 16));
     if (depth) fw_matmul_f32_ada_kernel_<<<grid, 32, 0, (cudaStream_t)stream>>>(a, b, c, rows, columns, depth);
     else
-        fw_zero_f32_ampere_kernel_<<<(unsigned)((rows * columns + 255) / 256), 256, 0, (cudaStream_t)stream>>>(
+        fw_zero_f32_ada_kernel_<<<(unsigned)((rows * columns + 255) / 256), 256, 0, (cudaStream_t)stream>>>(
             c, rows * columns);
     return cudaGetLastError() == cudaSuccess ? fw_success_k : fw_device_failure_k;
 }

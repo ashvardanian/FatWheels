@@ -11,7 +11,7 @@ It is small enough to read in an afternoon, so the build design is what you read
   A multiversioned build carries every capability the toolchain compiles and picks the best at runtime, for distributing to a diverse fleet.
   A monoversioned one keeps what its `-march` floor implies, for identical machines, with shorter builds and smaller binaries that run only there.
 - __Validated without the hardware.__
-  `test/conventions.py` turns every rule below into PASS or FAIL, and the [images](#images) carry every tool it needs: Intel SDE for AVX-512 and AMX, QEMU for SVE and SME, CUDA and ROCm for both GPU vendors.
+  `test/conventions.py` turns every rule below into a test, and the [images](#images) carry every tool it needs: Intel SDE for AVX-512 and AMX, QEMU for SVE and SME, CUDA and ROCm for both GPU vendors.
 
 There is one operation, `matmul`, written once per capability with its hardware's own matrix instruction.
 [`example/`](https://github.com/ashvardanian/FatWheels/blob/main/example/README.md) shows how a higher-level project reuses its probe verdicts, kernels and GPU building blocks, and nothing else.
@@ -37,8 +37,8 @@ The library builds with CMake, and the Python package with scikit-build-core ove
 
 ```sh
 cmake --preset clang-floor && cmake --build --preset clang-floor
-pip install .                                    # FATWHEELS_CUDA_ARCH="80;89;120" adds `fatwheels.cuda`
-pytest test/matmul.py                            # every capability this machine runs, against serial
+pip install .         # FATWHEELS_CUDA_ARCH="80;89;120" adds `fatwheels.cuda`
+pytest test/matmul.py # every capability this machine runs, against serial
 ```
 
 - `FATWHEELS_MARCH` sets the floor every unit compiles at, like `x86-64-v3`.
@@ -52,29 +52,29 @@ import numpy as np
 import fatwheels
 
 a, b = np.ones((64, 32), np.float32), np.ones((32, 48), np.float32)
-fatwheels.capabilities()                         # ['skylake', 'haswell', 'serial'] on an AVX-512 machine
-fatwheels.matmul(a, b)                           # the best capability
+fatwheels.capabilities()          # ['skylake', 'haswell', 'serial'] on an AVX-512 machine
+fatwheels.matmul(a, b)            # the best capability
 fatwheels.matmul(a, b, capability="serial")
 if fatwheels.cuda:
-    fatwheels.cuda.capabilities()                # ['ada', 'ampere', 'cuda'], as the driver loads them
+    fatwheels.cuda.capabilities() # ['ada', 'ampere', 'cuda'], as the driver loads them
 ```
 
 ## Images
 
 Three images, built from the `Dockerfile` here, carry every tool the checks need and serve other projects' CI as they are:
 
-| Tag      | Platforms    | Contents                                                                               |
-| :------- | :----------- | :------------------------------------------------------------------------------------- |
+| Tag      | Platforms    | Contents                                                                              |
+| :------- | :----------- | :------------------------------------------------------------------------------------ |
 | `cpu`    | amd64, arm64 | Ubuntu 26.04, Clang 23, GCC 15, CMake, Ninja, static QEMU, GCC 15 sysroots, Intel SDE |
-| `verify` | amd64, arm64 | `cpu` plus GenMC v0.19 and Spin, with Clang 22 for GenMC and its clients               |
-| `gpu`    | amd64, arm64 | CUDA 13.4, Clang 23, Clang 22 to host NVCC, and on amd64 ROCm 10.0                     |
+| `verify` | amd64, arm64 | `cpu` plus GenMC v0.19 and Spin, with Clang 22 for GenMC and its clients              |
+| `gpu`    | amd64, arm64 | CUDA 13.4, Clang 23, Clang 22 to host NVCC, and on amd64 ROCm 10.0                    |
 
 Each image has one command:
 
 ```sh
-docker run --rm -v "$PWD:/work" -w /work ghcr.io/ashvardanian/fatwheels:cpu python3 test/conventions.py cpu
-docker run --rm -v "$PWD:/work" -w /work ghcr.io/ashvardanian/fatwheels:gpu python3 test/conventions.py gpu
-python3 test/conventions.py gpu --run            # on the host, where the NVIDIA driver is
+docker run --rm -v "$PWD:/work" -w /work ghcr.io/ashvardanian/fatwheels:cpu python3 -m pytest test/conventions.py -m cpu
+docker run --rm -v "$PWD:/work" -w /work ghcr.io/ashvardanian/fatwheels:gpu python3 -m pytest test/conventions.py -m "cuda or rocm"
+python3 -m pytest test/conventions.py --run-devices # on the host, where the GPU drivers are
 ```
 
 The `cpu` checks build x86 natively, run Skylake and Sapphire Rapids under SDE, and run AArch64 under QEMU with SVE and SME on and off.

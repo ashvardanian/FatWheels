@@ -83,7 +83,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 COPY --from=scripts /install-llvm /usr/local/bin/install-llvm
 COPY --from=scripts /dpkg-excludes /etc/dpkg/dpkg.cfg.d/fatwheels
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        ca-certificates curl gnupg git cmake ninja-build make python3 xz-utils binutils gcc-15 g++-15 && \
+        ca-certificates curl gnupg git cmake ninja-build make python3 python3-pytest xz-utils binutils gcc-15 g++-15 && \
     install-llvm "${LLVM}" && \
     apt-get install -y --no-install-recommends "libomp-${LLVM}-dev" && \
     rm -rf /var/lib/apt/lists/*
@@ -157,7 +157,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 COPY --from=scripts /install-llvm /usr/local/bin/install-llvm
 COPY --from=scripts /dpkg-excludes /etc/dpkg/dpkg.cfg.d/fatwheels
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        ca-certificates curl gnupg git cmake ninja-build make python3 python3-dev python3-venv xz-utils binutils && \
+        ca-certificates curl gnupg git cmake ninja-build make python3 python3-dev python3-pytest python3-venv xz-utils binutils && \
     repository=https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2604 && \
     platform=$(uname -m | sed 's/aarch64/sbsa/') && \
     curl -fsSLo /tmp/cuda-keyring.deb "${repository}/${platform}/cuda-keyring_1.1-1_all.deb" && \

@@ -35,6 +35,15 @@ input = "VERSION"
 provider = "scikit_build_core.metadata.regex"
 regex = "(?P<value>.+)"
 
+[tool.pytest.ini_options]
+markers = [
+    "cpu: builds and checks CPU capabilities, natively and under SDE and QEMU",
+    "cuda: builds and checks CUDA generations",
+    "rocm: builds and checks ROCm generations",
+]
+python_files = ["*.py"]
+testpaths = ["test"]
+
 [tool.ruff]
 line-length = 120
 target-version = "py312"

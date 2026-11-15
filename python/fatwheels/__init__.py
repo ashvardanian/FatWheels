@@ -3,7 +3,6 @@
 `fatwheels.cuda` and `fatwheels.rocm` are `None` where their modules were not built or their runtime is missing.
 """
 
-import importlib
 
 import numpy as np
 
