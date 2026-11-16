@@ -5,8 +5,8 @@
 #
 # - `cpu`: Clang 23, GCC 15, static QEMU user-mode, GCC 15 sysroots and, on x86-64, Intel SDE, to cross-compile
 #   every CPU capability and run it under emulation.
-# - `verify`: `cpu` plus GenMC and Spin, to model-check concurrent code.
-# - `gpu`: CUDA 13.4, plus ROCm 10.0 on x86-64, to compile NVIDIA and AMD device code side by side.
+# - `verify`: GenMC, Spin and the Clang 22 that GenMC compiles its clients with, to model-check concurrent code.
+# - `gpu`: CUDA 13.5, plus ROCm 10.0 on x86-64, to compile NVIDIA and AMD device code side by side.
 #
 # Each publishes as `ghcr.io/ashvardanian/fatwheels:<target>-<commit>`, and every pin is an `ARG`.
 
@@ -42,8 +42,8 @@ path-exclude=/usr/local/cuda-*/targets/*/lib/libcublas*_static.a
 EOF
 
 FROM ${UBUNTU} AS qemu
-ARG QEMU_VERSION=11.1.2
-ARG QEMU_SHA256=731b5681e4bb18be313231579b8efd0296c5b015fa36dc533874b639ba838016
+ARG QEMU_VERSION=11.1.3
+ARG QEMU_SHA256=5a8289c7940dc77d3873c81a6c29ba3afe1446fc9d36e77fa1658cdbecb84b22
 ARG JOBS=
 RUN apt-get update && apt-get install -y --no-install-recommends \
         ca-certificates curl xz-utils build-essential ninja-build pkg-config python3 python3-venv flex bison \
@@ -60,10 +60,11 @@ RUN curl -fsSLo /tmp/qemu.tar.xz "https://download.qemu.org/qemu-${QEMU_VERSION}
 # SDE emulates the x86 capabilities QEMU lacks, AVX-512 and AMX among them; Intel's licence allows redistributing it
 # unmodified with its notices, which stay in `/opt/sde/Licenses`.
 FROM ${UBUNTU} AS sde-amd64
-ARG SDE_VERSION=9.53.0-2025-03-16
-ARG SDE_SHA256=f55138df53378198e8c0a89598351cdb3c5e7f8819e63e472b0bc179afaad34c
+ARG SDE_MIRROR=924984
+ARG SDE_VERSION=10.13.1-2026-07-28
+ARG SDE_SHA256=94e97d623fec54385686e1e7ba65ebc9941748c05ee451423948334892bf2b50
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl xz-utils && \
-    curl -fsSLo /tmp/sde.tar.xz "https://downloadmirror.intel.com/850782/sde-external-${SDE_VERSION}-lin.tar.xz" && \
+    curl -fsSLo /tmp/sde.tar.xz "https://downloadmirror.intel.com/${SDE_MIRROR}/sde-external-${SDE_VERSION}-lin.tar.xz" && \
     echo "${SDE_SHA256}  /tmp/sde.tar.xz" | sha256sum -c - && \
     mkdir -p /opt/sde && tar -xJf /tmp/sde.tar.xz --strip-components=1 -C /opt/sde
 
@@ -99,28 +100,47 @@ RUN for emulator in /usr/local/bin/qemu-*; do ln -s "${emulator##*/}" "${emulato
 COPY --from=sde /opt/sde /opt/sde
 RUN if [ -x /opt/sde/sde64 ]; then ln -s /opt/sde/sde64 /usr/local/bin/sde64; else rm -r /opt/sde; fi
 
-# GenMC v0.19 supports LLVM 19 to 22, and its passes lack the `printPipeline` LLVM 23's pass manager requires, so the
+# GenMC v0.20 supports LLVM 19 to 22, and its passes lack the `printPipeline` LLVM 23's pass manager requires, so the
 # model checker and its clients compile with Clang 22 until a GenMC release supports 23.
-FROM cpu AS genmc
-ARG GENMC_COMMIT=9f6c4c0772d0c42b325681581acc6a0f3eb9b5f7
+FROM ${UBUNTU} AS genmc
+ARG GENMC_COMMIT=fab5bba7d9efaf76990227c2f59d62c11c7ea2a3
 ARG JOBS=
-RUN install-llvm 22 clang-22 llvm-22-dev && \
-    apt-get install -y --no-install-recommends libffi-dev zlib1g-dev libedit-dev
+COPY --from=scripts /install-llvm /usr/local/bin/install-llvm
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        ca-certificates curl gnupg git cmake ninja-build libffi-dev zlib1g-dev libedit-dev && \
+    install-llvm 22 clang-22 llvm-22-dev
 RUN git init -q /tmp/genmc && \
     git -C /tmp/genmc fetch -q --depth 1 https://github.com/MPI-SWS/genmc "${GENMC_COMMIT}" && \
     git -C /tmp/genmc checkout -q FETCH_HEAD && \
     cmake -S /tmp/genmc -B /tmp/genmc/build -G Ninja -D CMAKE_BUILD_TYPE=Release -D CMAKE_INSTALL_PREFIX=/opt/genmc \
-        -D CMAKE_C_COMPILER=clang-22 -D CMAKE_CXX_COMPILER=clang++-22 -D LLVM_DIR=/usr/lib/llvm-22/lib/cmake/llvm && \
+        -D CMAKE_C_COMPILER=clang-22 -D CMAKE_CXX_COMPILER=clang++-22 -D CMAKE_PREFIX_PATH=/usr/lib/llvm-22 && \
     cmake --build /tmp/genmc/build --parallel ${JOBS:-$(nproc)} && \
     cmake --install /tmp/genmc/build --strip
 
-FROM cpu AS verify
-LABEL org.opencontainers.image.title="FatWheels Verify" \
-      org.opencontainers.image.description="The CPU image plus GenMC and Spin, to model-check concurrent code"
-# Spin preprocesses its models with `gcc`, which the cross compilers do not provide.
-RUN install-llvm 22 clang-22 && \
-    apt-get install -y --no-install-recommends gcc spin && \
+# Spin's last tag, 6.5.2, dates from 2019; its master carries 6.5.3. `char` is unsigned on Arm, where the LTL
+# lexer's `c != -1` would never see the end of its input.
+FROM ${UBUNTU} AS spin
+ARG SPIN_COMMIT=e21106ff7e58afe79275b3ca10179556afa97aa2
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates git make gcc bison && \
+    git init -q /tmp/spin && \
+    git -C /tmp/spin fetch -q --depth 1 https://github.com/nimble-code/Spin "${SPIN_COMMIT}" && \
+    git -C /tmp/spin checkout -q FETCH_HEAD && \
+    make -C /tmp/spin/Src CC="gcc -fsigned-char" && \
+    install -D /tmp/spin/Src/spin /opt/spin/bin/spin
+
+# Neither checker needs the CPU image's emulators or sysroots, so this one starts from Ubuntu itself.
+FROM ${UBUNTU} AS verify
+LABEL org.opencontainers.image.source=https://github.com/ashvardanian/FatWheels \
+      org.opencontainers.image.title="FatWheels Verify" \
+      org.opencontainers.image.description="GenMC, Spin and Clang 22, to model-check concurrent code" \
+      org.opencontainers.image.version=""
+ENV DEBIAN_FRONTEND=noninteractive
+COPY --from=scripts /install-llvm /usr/local/bin/install-llvm
+# Spin preprocesses its models with `gcc` and the runner compiles them with `cc`; `git` lists the cited sources.
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl gnupg git gcc && \
+    install-llvm 22 clang-22 && \
     rm -rf /var/lib/apt/lists/*
+COPY --from=spin /opt/spin/bin/spin /usr/local/bin/
 # `genmc` links `libLLVM` from Clang 22 and includes its runtime headers in every client it compiles.
 COPY --from=genmc /opt/genmc/bin/genmc /opt/genmc/bin/
 COPY --from=genmc /opt/genmc/include/genmc/runtime/ /opt/genmc/include/genmc/runtime/
@@ -144,14 +164,14 @@ RUN mkdir -p /rocm
 
 FROM rocm-${TARGETARCH} AS rocm
 
-# ROCm's Clang compiles AMD code objects. NVCC 13.4 hosts on Clang 22: with 23, even under
+# ROCm's Clang compiles AMD code objects. NVCC 13.5 supports Clang hosts up to 22, and with 23, even under
 # `-allow-unsupported-compiler`, its front end rejects libstdc++ 15's `<atomic>`, so every unit using it fails.
 FROM ${UBUNTU} AS gpu
-ARG CUDA=13.4
+ARG CUDA=13.5
 ARG LLVM
 LABEL org.opencontainers.image.source=https://github.com/ashvardanian/FatWheels \
       org.opencontainers.image.title="FatWheels GPU" \
-      org.opencontainers.image.description="CUDA 13.4, plus ROCm 10.0 on x86-64, for NVIDIA and AMD device code" \
+      org.opencontainers.image.description="CUDA 13.5, plus ROCm 10.0 on x86-64, for NVIDIA and AMD device code" \
       org.opencontainers.image.version=""
 ENV DEBIAN_FRONTEND=noninteractive
 COPY --from=scripts /install-llvm /usr/local/bin/install-llvm

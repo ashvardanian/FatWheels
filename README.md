@@ -73,8 +73,8 @@ Three images, built from the `Dockerfile` here, carry every tool the checks need
 | Tag      | Platforms    | Contents                                                                              |
 | :------- | :----------- | :------------------------------------------------------------------------------------ |
 | `cpu`    | amd64, arm64 | Ubuntu 26.04, Clang 23, GCC 15, CMake, Ninja, static QEMU, GCC 15 sysroots, Intel SDE |
-| `verify` | amd64, arm64 | `cpu` plus GenMC v0.19 and Spin, with Clang 22 for GenMC and its clients              |
-| `gpu`    | amd64, arm64 | CUDA 13.4, Clang 23, Clang 22 to host NVCC, and on amd64 ROCm 10.0                    |
+| `verify` | amd64, arm64 | Ubuntu 26.04, GenMC v0.20, Spin 6.5.3, Clang 22 for GenMC and its clients             |
+| `gpu`    | amd64, arm64 | CUDA 13.5, Clang 23, Clang 22 to host NVCC, and on amd64 ROCm 10.0                    |
 
 Each image has one command:
 
@@ -87,28 +87,11 @@ python3 -m pytest test/conventions.py --run-devices # on the host, where the GPU
 The `cpu` checks build x86 natively, run Skylake and Sapphire Rapids under SDE, and run AArch64 under QEMU with SVE and SME on and off.
 Intel's licence allows redistributing SDE unmodified, and its notices ship in `/opt/sde/Licenses`.
 AMD publishes ROCm for x86-64 alone, so the Arm `gpu` image carries CUDA only.
-NVCC's front end rejects libstdc++ 15's `<atomic>` under a Clang 23 host, so `gpu` sets `CUDAHOSTCXX=clang++-22`, and GenMC v0.19 in `verify` does not compile against LLVM 23.
-Every pin is an `ARG`: `UBUNTU`, `ROCM` and `LLVM` at the top of the file, and `QEMU_VERSION`, `SDE_VERSION`, `GENMC_COMMIT` and `CUDA` with their checksums in their stages.
+NVCC's front end rejects libstdc++ 15's `<atomic>` under a Clang 23 host, so `gpu` sets `CUDAHOSTCXX=clang++-22`, and GenMC v0.20 in `verify` does not compile against LLVM 23.
+Every pin is an `ARG`: `UBUNTU`, `ROCM` and `LLVM` at the top of the file, and `QEMU_VERSION`, `SDE_VERSION`, `GENMC_COMMIT`, `SPIN_COMMIT` and `CUDA` with their checksums in their stages.
 
 ## Publishing
 
-The images are built on local machines and pushed by hand, as they change only when a pin does.
-Each machine builds its own architecture natively, an x86-64 Linux box for `amd64` and an Apple silicon Mac or an Arm server for `arm64`:
-
-```sh
-arch=$(docker version --format '{{.Server.Arch}}') commit=$(git rev-parse --short=7 HEAD)
-for target in cpu verify gpu; do
-    docker buildx build --target $target --provenance=false --tag ghcr.io/ashvardanian/fatwheels:$target-$commit-$arch --push .
-done
-```
-
-Without `--provenance=false`, BuildKit wraps each image with an attestation that GHCR lists as an `unknown/unknown` platform.
-Once both architectures are up, either machine joins them into the multi-architecture tags that workflows pin:
-
-```sh
-for target in cpu verify gpu; do
-    docker buildx imagetools create --tag ghcr.io/ashvardanian/fatwheels:$target-$commit \
-        --tag ghcr.io/ashvardanian/fatwheels:$target \
-        ghcr.io/ashvardanian/fatwheels:$target-$commit-amd64 ghcr.io/ashvardanian/fatwheels:$target-$commit-arm64
-done
-```
+The `Images` workflow builds every image natively on x86-64 and Arm runners whenever `main` changes the `Dockerfile`, and on demand.
+It pushes `<target>-<commit>-<arch>`, then joins both architectures into `<target>-<commit>` and `<target>`, and lists each digest in the run's summary for workflows to pin.
+A registry cache per target and architecture and timestamps pinned to the commit keep unchanged stages byte-identical, so a bumped pin uploads only the layers it changes.

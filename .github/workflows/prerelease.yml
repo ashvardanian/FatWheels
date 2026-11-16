@@ -37,7 +37,7 @@ jobs:
           pip install .[test]
           pytest test/matmul.py -x
 
-  # The images are built on local machines and pushed, as the README's publishing steps show; pin them by digest.
+  # The `Images` workflow publishes the images; pin them by digest.
   check_cpu:
     name: Check CPU Capabilities under SDE and QEMU
     runs-on: ubuntu-26.04
