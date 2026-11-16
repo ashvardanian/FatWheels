@@ -58,6 +58,8 @@ if (FATWHEELS_BUILD_TEST)
     add_executable(fatwheels_test test/matmul.c)
     target_compile_options(fatwheels_test PRIVATE ${fatwheels_unit_arch_flags_})
     target_link_libraries(fatwheels_test PRIVATE fatwheels_static)
+    add_executable(fatwheels_test_placement test/placement.c)
+    target_link_libraries(fatwheels_test_placement PRIVATE fatwheels_static)
 endif ()
 if (FATWHEELS_BUILD_TEST AND fatwheels_haswell_compiled)
     # A unit whose flags enable nothing, seeing the declaration of a kernel the library holds.

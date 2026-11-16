@@ -35,21 +35,6 @@ def run(*command, check: bool = True, stdin: str | None = None) -> subprocess.Co
 
 
 @pytest.fixture(scope="session")
-def build():
-    """Builds a preset of the library on first use and returns its tree."""
-    trees: dict[str, Path] = {}
-
-    def tree_of(preset: str) -> Path:
-        if preset not in trees:
-            subprocess.run(["cmake", "--preset", preset], cwd=root, check=True, capture_output=True)
-            subprocess.run(["cmake", "--build", "--preset", preset], cwd=root, check=True, capture_output=True)
-            trees[preset] = root / f"build_{preset}"
-        return trees[preset]
-
-    return tree_of
-
-
-@pytest.fixture(scope="session")
 def build_example():
     """Builds `example/` as its own project, as a downstream user would, once per vendor."""
     trees: dict[str, Path] = {}

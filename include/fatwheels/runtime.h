@@ -97,6 +97,17 @@ FATWHEELS_API fw_device_services_t const *fw_device_services(fw_capability_t cap
     (void)capabilities;
     return NULL;
 }
+
+FATWHEELS_API fw_size_t fw_devices(fw_device_t *into, fw_size_t capacity) {
+    (void)into, (void)capacity;
+    return 0;
+}
+
+FATWHEELS_API fw_status_t fw_placement_resolve(fw_device_t const *table, fw_size_t table_count,
+                                               fw_size_t const *positions, fw_size_t count, fw_placement_t *placement) {
+    (void)table, (void)table_count, (void)positions, (void)count, (void)placement;
+    return fw_missing_library_k;
+}
 #endif // FATWHEELS_HEADER_ONLY
 
 #if defined(__cplusplus)

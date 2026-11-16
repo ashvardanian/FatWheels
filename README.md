@@ -31,6 +31,13 @@ Every capability carries two flags, and every capability header reads them in th
 A capability's unit, like `src/capabilities/sapphireamx.c`, sets the targets of the capabilities it builds on to 0, so each kernel is defined once.
 GPU building blocks are `static __device__ __forceinline__`, so every generation's blocks compile under every code, and a unit that writes the floor target to 0 gets the blocks it calls and no library kernel at all.
 
+## Device Placement
+
+`fw_devices` lists every GPU of the build's vendors, NVIDIA's then AMD's, with the generations each one loads, asking each loader once.
+`fw_placement_resolve` places positions in that table on one vendor and the best generation every listed device loads, and a launch runs on `table[positions[i]].vendor_ordinal`.
+It refuses a list that spans vendors or shares no generation, so every device of a job runs the same kernels.
+`test/placement.py` checks it on emulated machines, like two Blackwell RTX cards beside two H100s and two MI300Xs, through fake tables that load a generation wherever its compiled codes run.
+
 ## Building
 
 The library builds with CMake, and the Python package with scikit-build-core over it:

@@ -39,6 +39,7 @@ FATWHEELS_API fw_status_t fw_matmul_f32_best(fw_f32_t const *a, fw_f32_t const *
 /** One GPU vendor's runtime services, so host code moves memory and loads its own device code through one table
  *  whichever vendor runs it. Every entry reports failures as `fw_device_failure_k`. */
 typedef struct {
+    int (*count)(void);                    // the devices the driver sees, or 0 without a driver
     fw_capability_t (*loaded)(int device); // the generations whose kernels the driver loads on @p device
     fw_status_t (*allocate)(void **pointer, fw_size_t bytes);
     fw_status_t (*release)(void *pointer);
@@ -55,6 +56,30 @@ typedef struct {
 /** The services of the GPU vendor whose capability group @p capabilities names, or `NULL` where this build lacks
  *  that vendor or @p capabilities names the CPU. */
 FATWHEELS_API fw_device_services_t const *fw_device_services(fw_capability_t capabilities);
+
+/** One GPU of the machine, as placement reads it. */
+typedef struct {
+    fw_capability_t vendor; // `fw_cap_cuda_k` or `fw_cap_rocm_k`
+    int vendor_ordinal;     // in its runtime
+    fw_capability_t loaded; // generations it loads, asked once
+} fw_device_t;
+
+/** Fills @p into with up to @p capacity GPUs of every vendor this build holds, NVIDIA then AMD, asking each one's
+ *  loader once, and returns how many it filled. */
+FATWHEELS_API fw_size_t fw_devices(fw_device_t *into, fw_size_t capacity);
+
+/** Devices that run together: one vendor's floor bit, the best generation all of them load, and their positions. */
+typedef struct {
+    fw_capability_t vendor, generation;
+    fw_device_t const *table;   // the table the positions index
+    fw_size_t const *positions; // the caller's positions, borrowed
+    fw_size_t count;
+} fw_placement_t;
+
+/** Places @p positions into @p table, or returns `fw_missing_capability_k` where they are empty, fall outside the
+ *  table, span vendors, or share no generation. A launch runs on `table[positions[i]].vendor_ordinal`. */
+FATWHEELS_API fw_status_t fw_placement_resolve(fw_device_t const *table, fw_size_t table_count,
+                                               fw_size_t const *positions, fw_size_t count, fw_placement_t *placement);
 
 /** The GPU generations whose kernels load on @p device, or 0 without a driver or device. */
 #if FATWHEELS_ARCH_CUDA_

@@ -46,7 +46,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
       - name: Check
-        run: python3 -m pytest test/conventions.py -m cpu
+        run: python3 -m pytest test/conventions.py test/placement.py -m cpu
 
   # Each emulated CPU is its own row: QEMU for SVE and SME, Intel SDE for the AVX-512 and AMX that QEMU lacks.
   test_emulated:

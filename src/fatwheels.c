@@ -155,3 +155,30 @@ FATWHEELS_API fw_device_services_t const *fw_device_services(fw_capability_t cap
     };
     return groups[fw_capability_group_of_(capabilities)];
 }
+
+FATWHEELS_API fw_size_t fw_devices(fw_device_t *into, fw_size_t capacity) {
+    fw_capability_t const vendors[] = {fw_cap_cuda_k, fw_cap_rocm_k};
+    fw_size_t filled = 0;
+    for (fw_size_t i = 0; i != sizeof(vendors) / sizeof(vendors[0]); ++i) {
+        fw_device_services_t const *services = fw_device_services(vendors[i]);
+        int const count = services ? services->count() : 0;
+        for (int ordinal = 0; ordinal != count && filled != capacity; ++ordinal)
+            into[filled++] = (fw_device_t) {vendors[i], ordinal, services->loaded(ordinal)};
+    }
+    return filled;
+}
+
+FATWHEELS_API fw_status_t fw_placement_resolve(fw_device_t const *table, fw_size_t table_count,
+                                               fw_size_t const *positions, fw_size_t count, fw_placement_t *placement) {
+    uint64_t shared = count ? ~(uint64_t)0 : 0;
+    for (fw_size_t i = 0; i != count; ++i) {
+        if (positions[i] >= table_count || table[positions[i]].vendor != table[positions[0]].vendor)
+            return fw_missing_capability_k;
+        shared &= (uint64_t)table[positions[i]].loaded;
+    }
+    if (!shared) return fw_missing_capability_k;
+    placement->vendor = table[positions[0]].vendor;
+    placement->generation = (fw_capability_t)(1ull << (63 - __builtin_clzll(shared)));
+    placement->table = table, placement->positions = positions, placement->count = count;
+    return fw_success_k;
+}

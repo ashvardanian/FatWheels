@@ -17,6 +17,13 @@ static bool fw_loads_rocm_(void const *kernel) {
     return loads;
 }
 
+static int fw_count_rocm_(void) {
+    int count = 0;
+    if (hipGetDeviceCount(&count) == hipSuccess) return count;
+    (void)hipGetLastError();
+    return 0;
+}
+
 extern "C" FATWHEELS_API fw_capability_t fw_capabilities_loaded_rocm(int device) {
     int previous = 0;
     if (hipGetDevice(&previous) != hipSuccess || hipSetDevice(device) != hipSuccess) {
@@ -64,7 +71,7 @@ static fw_status_t fw_launch_rocm_(void *kernel, unsigned const grid[3], unsigne
 }
 
 extern "C" fw_device_services_t const fw_device_services_rocm_ = {
-    fw_capabilities_loaded_rocm, fw_allocate_rocm_,    fw_release_rocm_,     fw_copy_to_device_rocm_,
-    fw_copy_to_host_rocm_,       fw_synchronize_rocm_, fw_load_module_rocm_, fw_unload_module_rocm_,
-    fw_find_kernel_rocm_,        fw_launch_rocm_,
+    fw_count_rocm_,          fw_capabilities_loaded_rocm, fw_allocate_rocm_,    fw_release_rocm_,
+    fw_copy_to_device_rocm_, fw_copy_to_host_rocm_,       fw_synchronize_rocm_, fw_load_module_rocm_,
+    fw_unload_module_rocm_,  fw_find_kernel_rocm_,        fw_launch_rocm_,
 };

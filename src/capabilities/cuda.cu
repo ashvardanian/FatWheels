@@ -18,6 +18,13 @@ static bool fw_loads_cuda_(void const *kernel) {
     return loads;
 }
 
+static int fw_count_cuda_(void) {
+    int count = 0;
+    if (cudaGetDeviceCount(&count) == cudaSuccess) return count;
+    cudaGetLastError();
+    return 0;
+}
+
 extern "C" FATWHEELS_API fw_capability_t fw_capabilities_loaded_cuda(int device) {
     int previous = 0;
     if (cudaGetDevice(&previous) != cudaSuccess || cudaSetDevice(device) != cudaSuccess) {
@@ -68,7 +75,7 @@ static fw_status_t fw_launch_cuda_(void *kernel, unsigned const grid[3], unsigne
 }
 
 extern "C" fw_device_services_t const fw_device_services_cuda_ = {
-    fw_capabilities_loaded_cuda, fw_allocate_cuda_,    fw_release_cuda_,     fw_copy_to_device_cuda_,
-    fw_copy_to_host_cuda_,       fw_synchronize_cuda_, fw_load_module_cuda_, fw_unload_module_cuda_,
-    fw_find_kernel_cuda_,        fw_launch_cuda_,
+    fw_count_cuda_,          fw_capabilities_loaded_cuda, fw_allocate_cuda_,    fw_release_cuda_,
+    fw_copy_to_device_cuda_, fw_copy_to_host_cuda_,       fw_synchronize_cuda_, fw_load_module_cuda_,
+    fw_unload_module_cuda_,  fw_find_kernel_cuda_,        fw_launch_cuda_,
 };
