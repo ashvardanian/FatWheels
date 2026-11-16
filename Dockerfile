@@ -121,7 +121,7 @@ RUN git init -q /tmp/genmc && \
 # lexer's `c != -1` would never see the end of its input.
 FROM ${UBUNTU} AS spin
 ARG SPIN_COMMIT=e21106ff7e58afe79275b3ca10179556afa97aa2
-RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates git make gcc bison && \
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates git make gcc libc6-dev bison && \
     git init -q /tmp/spin && \
     git -C /tmp/spin fetch -q --depth 1 https://github.com/nimble-code/Spin "${SPIN_COMMIT}" && \
     git -C /tmp/spin checkout -q FETCH_HEAD && \
@@ -136,8 +136,9 @@ LABEL org.opencontainers.image.source=https://github.com/ashvardanian/FatWheels 
       org.opencontainers.image.version=""
 ENV DEBIAN_FRONTEND=noninteractive
 COPY --from=scripts /install-llvm /usr/local/bin/install-llvm
-# Spin preprocesses its models with `gcc` and the runner compiles them with `cc`; `git` lists the cited sources.
-RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl gnupg git gcc && \
+# Spin preprocesses its models with `gcc`, the runner compiles them with `cc`, and GenMC's clients take the C and C++
+# standard headers from `g++`; `git` lists the cited sources.
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl gnupg git g++ && \
     install-llvm 22 clang-22 && \
     rm -rf /var/lib/apt/lists/*
 COPY --from=spin /opt/spin/bin/spin /usr/local/bin/
