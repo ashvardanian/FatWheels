@@ -41,7 +41,7 @@ jobs:
   check_cpu:
     name: Check CPU Capabilities under SDE and QEMU
     runs-on: ubuntu-26.04
-    container: ghcr.io/ashvardanian/fatwheels:cpu@sha256:644a4ce0011feb651a2011d6e2a08400fa4ea8015787e33e62e1a88dc1cd1009
+    container: ghcr.io/ashvardanian/fatwheels:cpu@sha256:d229196426ec02f358ab84b845434906180cd93d9ae37987651a078b277d17bb
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -52,7 +52,7 @@ jobs:
   test_emulated:
     name: Test ${{ matrix.preset }} under ${{ matrix.emulator }}
     runs-on: ubuntu-26.04
-    container: ghcr.io/ashvardanian/fatwheels:cpu@sha256:644a4ce0011feb651a2011d6e2a08400fa4ea8015787e33e62e1a88dc1cd1009
+    container: ghcr.io/ashvardanian/fatwheels:cpu@sha256:d229196426ec02f358ab84b845434906180cd93d9ae37987651a078b277d17bb
     strategy:
       fail-fast: false
       matrix:
@@ -76,7 +76,7 @@ jobs:
   check_gpu:
     name: Check GPU Generations on ${{ matrix.arch }}
     runs-on: ${{ matrix.arch == 'arm64' && 'ubuntu-26.04-arm' || 'ubuntu-26.04' }}
-    container: ghcr.io/ashvardanian/fatwheels:gpu@sha256:1ae7b480bfe25fc0d337137ac4aa2f550554bf697160a788616136c8a6728df2
+    container: ghcr.io/ashvardanian/fatwheels:gpu@sha256:3b10d6ac57487f5b35602a78c596555d63dbf5d90c7e35166b2fe623f1cb9fb0
     strategy:
       fail-fast: false
       matrix:
